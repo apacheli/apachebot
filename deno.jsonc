@@ -1,0 +1,13 @@
+{
+  "fmt": {
+    "lineWidth": 800
+  },
+  "imports": {
+    "std/": "https://deno.land/std@0.201.0/",
+    "whirlybird": "https://github.com/apacheli/whirlybird/raw/dev/lib.js",
+    "whirlybird/": "https://github.com/apacheli/whirlybird/raw/dev/"
+  },
+  "tasks": {
+    "start": "deno run --allow-env --allow-net --allow-read main.js"
+  }
+}
