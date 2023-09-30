@@ -8,11 +8,8 @@ export const details = {
 export const handler = () => {
   const embed = {
     title: "Info about apachebot",
+    url: "https://github.com/apacheli/apachebot",
     fields: [
-      {
-        name: "Source",
-        value: "https://github.com/apacheli/apachebot",
-      },
       {
         name: "apachebot",
         value: "1.0.0",

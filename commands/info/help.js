@@ -48,26 +48,25 @@ export const handler = ({ bot, args }) => {
   if (flags?.string) {
     for (const str of flags.string) {
       usage += ` [--${str}]`;
-      opts += `\n${args.text ? `  --${str} [str]        ` : `\`--${str} [str]\`: `}${details.flags[str]}`;
+      opts += `\n${args.text ? `  --${str} [...]        ` : `\`--${str} [...]\`: `}${details.flags[str]}`;
     }
   }
   const source = `https://github.com/apacheli/apachebot/tree/master/commands/${details.p}.js`;
   if (args.text) {
-    let str = `\`\`\`\n${bot.prefix}${details.id} [...]${usage}\n\n${details.description}\n\nSource: ${source}\n`;
+    let str = `\`\`\`\n${bot.prefix}${details.id} [...]${usage}\n\nSource: ${source}\n\n${details.description}\n`;
     if (opts.length > 0) {
       str += `\nOptions:${opts}\n`;
     }
     str += "```";
     return str;
   }
-  const fields = [
-    { name: "Source", value: source },
-  ];
+  const fields = [];
   if (opts.length > 0) {
     fields.push({ name: "options", value: opts.slice(1) });
   }
   const embed = {
     title: details.id,
+    url: source,
     description: `\`${bot.prefix}${details.id} [...]${usage}\`\n\n${details.description}`,
     fields,
   };

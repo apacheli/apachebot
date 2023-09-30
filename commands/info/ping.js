@@ -5,4 +5,4 @@ export const details = {
   p: "info/ping",
 };
 
-export const handler = () => "no";
+export const handler = () => "pong";

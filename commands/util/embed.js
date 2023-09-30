@@ -2,7 +2,7 @@ export const details = {
   id: "embed",
   aliases: ["embeds"],
   description: "Send an embedded message.",
-  p: "dev/embed",
+  p: "util/embed",
 };
 
 export const handler = ({ args }) => {
