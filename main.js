@@ -1,4 +1,5 @@
 import { CacheClient, closeOnInterrupt, GatewayClient, RestClient } from "whirlybird";
+import { readDirRecursive } from "@apacheli/std/lib/fs.js";
 
 const token = `Bot ${Deno.env.get("BOT_TOKEN")}`;
 
@@ -30,25 +31,22 @@ const aliases = new Map();
 const commands = new Map();
 const events = new Map();
 
-const importAll = async (path) => {
-  const mods = [];
-  for await (const dirEntry of Deno.readDir(path)) {
-    const filePath = `${path}/${dirEntry.name}`;
-    mods.push(dirEntry.isDirectory ? importAll(filePath) : import(filePath));
+(async () => {
+  for await (const filePath of readDirRecursive("./commands")) {
+    const command = await import(filePath);
+    commands.set(command.details.id, command);
+    for (const alias of command.details.aliases) {
+      aliases.set(alias, command.details.id);
+    }
   }
-  return (await Promise.all(mods)).flat();
-};
+})();
 
-for (const command of await importAll("./commands")) {
-  commands.set(command.details.id, command);
-  for (const alias of command.details.aliases) {
-    aliases.set(alias, command.details.id);
+(async () => {
+  for await (const filePath of readDirRecursive("./events")) {
+    const event = await import(filePath);
+    events.set(event.default, event.handler);
   }
-}
-
-for (const event of await importAll("./events")) {
-  events.set(event.default, event.handler);
-}
+})();
 
 const bot = {
   aliases,

@@ -8,14 +8,10 @@ export const details = {
   },
 };
 
-export const flags = {
-  boolean: ["text"],
-};
-
-export const handler = ({ bot, args }) => {
-  const commandName = args._[0];
-  if (!commandName) {
-    if (args.text) {
+export const handler = ({ bot, args, kwargs }) => {
+  const commandName = args[0];
+  if (commandName === undefined) {
+    if (kwargs.text) {
       const str = [...bot.commands.values()].map((c) => `${c.details.id}        ${c.details.description}`).join("\n");
       return `\`\`\`\nType \`${bot.prefix}help [...]\` for more details.\n\n${str}\n\`\`\``;
     }
@@ -32,37 +28,29 @@ export const handler = ({ bot, args }) => {
       },
     };
   }
-  const command = bot.commands.get(bot.aliases.get(commandName) ?? commandName);
-  if (!command) {
+  const command = bot.commands.get(commandName) || bot.commands.get(bot.aliases.get(commandName));
+  if (command === undefined) {
     return `\`${commandName}\` command not found. Type \`${bot.prefix}help\` for a list of commands.`;
   }
-  const { flags, details } = command;
+  const { details } = command;
   let usage = "";
-  let opts = "";
-  if (flags?.boolean) {
-    for (const bool of flags.boolean) {
-      usage += ` [--${bool}]`;
-      opts += `\n${args.text ? `  --${bool}        ` : `\`--${bool}\`: `}${details.flags[bool]}`;
-    }
-  }
-  if (flags?.string) {
-    for (const str of flags.string) {
-      usage += ` [--${str}]`;
-      opts += `\n${args.text ? `  --${str} [...]        ` : `\`--${str} [...]\`: `}${details.flags[str]}`;
-    }
+  let flags = "";
+  for (const flag in details.flags) {
+    usage += ` [--${flag}]`;
+    flags += `\n${kwargs.text ? `  --${flag}        ` : `\`--${flag}\`: `}${details.flags[flag]}`;
   }
   const source = `https://github.com/apacheli/apachebot/tree/master/commands/${details.p}.js`;
-  if (args.text) {
+  if (kwargs.text) {
     let str = `\`\`\`\n${bot.prefix}${details.id} [...]${usage}\n\nSource: ${source}\n\n${details.description}\n`;
-    if (opts.length > 0) {
-      str += `\nOptions:${opts}\n`;
+    if (flags.length > 0) {
+      str += `\nOptions:${flags}\n`;
     }
     str += "```";
     return str;
   }
   const fields = [];
-  if (opts.length > 0) {
-    fields.push({ name: "options", value: opts.slice(1) });
+  if (flags.length > 0) {
+    fields.push({ name: "options", value: flags.substring(1) });
   }
   const embed = {
     title: details.id,

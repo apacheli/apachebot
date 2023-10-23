@@ -8,8 +8,6 @@ export const details = {
   },
 };
 
-export const flags = {
-  string: ["format"],
+export const handler = ({ args, kwargs }) => {
+  return `<t:${Math.floor((args[0] ? new Date(args[0]).getTime() : Date.now()) / 1e+3)}:${kwargs.format ?? "f"}>`;
 };
-
-export const handler = ({ args }) => `<t:${Math.floor(new Date(args._[0] ?? Date.now()).getTime() / 1e+3)}:${args.format ?? "f"}>`;

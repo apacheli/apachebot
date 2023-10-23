@@ -1,9 +1,18 @@
 {
-  "version": "2",
+  "version": "3",
+  "redirects": {
+    "https://github.com/apacheli/std/raw/master/lib/args_parser.js": "https://raw.githubusercontent.com/apacheli/std/master/lib/args_parser.js",
+    "https://github.com/apacheli/std/raw/master/lib/color.js": "https://raw.githubusercontent.com/apacheli/std/master/lib/color.js",
+    "https://github.com/apacheli/std/raw/master/lib/fs.js": "https://raw.githubusercontent.com/apacheli/std/master/lib/fs.js",
+    "https://github.com/apacheli/std/raw/master/lib/random.js": "https://raw.githubusercontent.com/apacheli/std/master/lib/random.js",
+    "https://github.com/apacheli/whirlybird/raw/dev/lib.js": "https://raw.githubusercontent.com/apacheli/whirlybird/dev/lib.js",
+    "https://github.com/apacheli/whirlybird/raw/dev/util/lib.js": "https://raw.githubusercontent.com/apacheli/whirlybird/dev/util/lib.js"
+  },
   "remote": {
-    "https://deno.land/std@0.201.0/assert/assert.ts": "9a97dad6d98c238938e7540736b826440ad8c1c1e54430ca4c4e623e585607ee",
-    "https://deno.land/std@0.201.0/assert/assertion_error.ts": "4d0bde9b374dfbcbe8ac23f54f567b77024fb67dbb1906a852d67fe050d42f56",
-    "https://deno.land/std@0.201.0/flags/mod.ts": "0948466fc437f017f00c0b972a422b3dc3317a790bcf326429d23182977eaf9f",
+    "https://raw.githubusercontent.com/apacheli/std/master/lib/args_parser.js": "9bef9d1c9157585b275ba357723a391c9f9bcae8b0c7b48fdc0ae0d07bf0a73a",
+    "https://raw.githubusercontent.com/apacheli/std/master/lib/color.js": "490a49a79259a6451705c0681946fb5410b5bbbdb943b6c801333841ce78952f",
+    "https://raw.githubusercontent.com/apacheli/std/master/lib/fs.js": "e32f3c80b6c6b0cafc7889f59038f9c8da0b9133a78530082e69ee5306b6bcf5",
+    "https://raw.githubusercontent.com/apacheli/std/master/lib/random.js": "d806d13afa2e34958482a4c7f91e9323bcb268772e3fd0d69c40a6d390a052dc",
     "https://raw.githubusercontent.com/apacheli/whirlybird/dev/cache/cache_client.js": "d1ae706636af6fa5cfaa2be85f7a209c8a716cbc4d56bf556ee7bca1256ae556",
     "https://raw.githubusercontent.com/apacheli/whirlybird/dev/cache/cache_map.js": "c98a5e75768307af7ce2eb8b57c66593a12cc61644be6524e614172742be610e",
     "https://raw.githubusercontent.com/apacheli/whirlybird/dev/cache/channel.js": "4940b8b27c81e1dab11809e735c15de648ede784663bd4dd387d1c4624daf3d3",

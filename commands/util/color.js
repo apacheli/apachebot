@@ -1,3 +1,6 @@
+import { rgb, rgbToCmyk, rgbToHls, rgbToHsv } from "@apacheli/std/lib/color.js";
+import { field } from "../../util/embed.js";
+
 export const details = {
   id: "color",
   aliases: ["colour", "hex", "hsb", "hls", "hsl", "hsv", "rgb"],
@@ -5,19 +8,26 @@ export const details = {
   p: "util/color",
 };
 
-const { abs, floor, max, min, sqrt } = Math;
+const { abs, floor } = Math;
 
 export const handler = ({ args }) => {
-  const i = args._[0] ?? Math.floor(Math.random() * 16777215);
-  const color = i[0] === "#" ? parseInt(i.substring(1), 16) : parseInt(i);
-  if (color !== color || color < 0 || color > 16777215) {
+  let color = args[0] ?? floor(Math.random() * 16777215);
+  if (typeof color === "string") {
+    if (color[0] !== "#") {
+      return "Bad color.";
+    }
+    color = parseInt(color.substring(1), 16);
+  }
+  if (Number.isNaN(color) || color < 0 || color > 16777215) {
     return "Bad color.";
   }
-  const [r, g, b] = toRgb(color);
-  const [h, l, s] = rgbToHls(r, g, b);
-  const [h1, s2, v] = rgbToHsv(r, g, b);
-  const [c, m, y, k] = rgbToCmyk(r, g, b);
-  const field = (name, value) => ({ name, value, inline: true });
+  const [r, g, b] = rgb(color);
+  const rc = r / 255;
+  const gc = g / 255;
+  const bc = b / 255;
+  const [h, l, s] = rgbToHls(rc, gc, bc);
+  const [h1, s1, v] = rgbToHsv(rc, gc, bc);
+  const [c, m, y, k] = rgbToCmyk(rc, gc, bc);
   const embed = {
     title: closestColor(r, g, b),
     color,
@@ -26,8 +36,8 @@ export const handler = ({ args }) => {
       field("Hexadecimal", `#${color.toString(16).padStart(6, "0")}`),
       field("RGB", `${r}, ${g}, ${b}`),
       field("HLS", `${floor(h * 360)}\u00B0, ${floor(l * 100)}%, ${floor(s * 100)}%`),
-      field("HSV", `${floor(h1 * 360)}\u00B0, ${floor(s2 * 100)}%, ${floor(v * 100)}%`),
-      field("CMYK", `${floor(c)}%, ${floor(m)}%, ${floor(y)}%, ${floor(k * 100)}%`),
+      field("HSV", `${floor(h1 * 360)}\u00B0, ${floor(s1 * 100)}%, ${floor(v * 100)}%`),
+      field("CMYK", `${floor(c * 100)}%, ${floor(m * 100)}%, ${floor(y * 100)}%, ${floor(k * 100)}%`),
     ],
   };
   return {
@@ -37,70 +47,8 @@ export const handler = ({ args }) => {
   };
 };
 
-const toRgb = (d) => [d >> 16 & 255, d >> 8 & 255, d & 255];
-
-// https://github.com/python/cpython/blob/3.11/Lib/colorsys.py#L125
-const rgbToHsv = (r, g, b) => {
-  const maxc = max(r, g, b);
-  const minc = min(r, g, b);
-  const v = maxc / 255;
-  if (minc === maxc) {
-    return [0, 0, v];
-  }
-  const d = maxc - minc;
-  const s = d / maxc;
-  const rc = (maxc - r) / d;
-  const gc = (maxc - g) / d;
-  const bc = (maxc - b) / d;
-  let h;
-  if (r == maxc) {
-    h = bc - gc + (g < b ? 6 : 0);
-  } else if (g == maxc) {
-    h = 2 + rc - bc;
-  } else {
-    h = 4 + gc - rc;
-  }
-  h /= 6;
-  return [h, s, v];
-};
-
-// https://github.com/python/cpython/blob/3.11/Lib/colorsys.py#L75
-const rgbToHls = (r, g, b) => {
-  const maxc = max(r, g, b);
-  const minc = min(r, g, b);
-  const c = maxc + minc;
-  const l = c / 2 / 255;
-  if (maxc === minc) {
-    return [0, l, 0];
-  }
-  const d = maxc - minc;
-  const s = d === 0 ? 0 : d / (1 - abs(2 * l - 1)) / 255;
-  const rc = (maxc - r) / d;
-  const gc = (maxc - g) / d;
-  const bc = (maxc - b) / d;
-  let h;
-  if (r === maxc) {
-    h = bc - gc + (g < b ? 6 : 0);
-  } else if (g === maxc) {
-    h = 2.0 + rc - bc;
-  } else {
-    h = 4.0 + gc - rc;
-  }
-  h /= 6;
-  return [h, l, s];
-};
-
-const rgbToCmyk = (r, g, b) => {
-  const k = max(r, g, b);
-  const c = r && (k - r) / k * 100;
-  const m = g && (k - g) / k * 100;
-  const y = b && (k - b) / k * 100;
-  return [c, m, y, k / -255 + 1];
-};
-
 const colors = {
   "Black": [0, 0, 0],
-  "Gray": [128, 128, 128],
   "White": [255, 255, 255],
   "Red": [255, 0, 0],
   "Orange": [255, 128, 0],
@@ -113,14 +61,14 @@ const colors = {
   "Blue": [0, 0, 255],
   "Purple": [128, 0, 255],
   "Magenta": [255, 0, 255],
-  "Hot Pink": [255, 0, 128],
+  "Fuchsia": [255, 0, 128],
 };
 
 const closestColor = (r, g, b) => {
   let c, s = Infinity;
   for (const color in colors) {
     const [cr, cg, cb] = colors[color];
-    const d = sqrt((r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2);
+    const d = abs(r - cr) + abs(g - cg) + abs(b - cb);
     if (s > d) {
       s = d;
       c = color;

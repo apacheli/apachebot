@@ -1,3 +1,5 @@
+import { rng } from "@apacheli/std/lib/random.js";
+
 export const details = {
   id: "random",
   aliases: ["die", "dice", "number", "roll"],
@@ -9,12 +11,4 @@ export const details = {
   },
 };
 
-export const flags = {
-  string: ["max", "min"],
-};
-
-export const handler = ({ args }) => {
-  const max = parseInt(args.max ?? 6);
-  const min = parseInt(args.min ?? 0);
-  return `${min + Math.round(Math.random() * (max - min))}`;
-};
+export const handler = ({ kwargs }) => rng(kwargs.max ?? 6, kwargs.min);

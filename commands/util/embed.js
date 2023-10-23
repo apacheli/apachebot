@@ -5,14 +5,8 @@ export const details = {
   p: "util/embed",
 };
 
-export const handler = ({ args }) => {
-  try {
-    return {
-      body: {
-        embeds: args._.map((a) => JSON.parse(a)),
-      },
-    };
-  } catch (error) {
-    return `\`${error.message}\``;
-  }
-};
+export const handler = ({ args }) => ({
+  body: {
+    embeds: args.map((a) => JSON.parse(a)),
+  },
+});

@@ -3,7 +3,7 @@
     "lineWidth": 800
   },
   "imports": {
-    "std/": "https://deno.land/std@0.201.0/",
+    "@apacheli/std/": "https://github.com/apacheli/std/raw/master/",
     "whirlybird": "https://github.com/apacheli/whirlybird/raw/dev/lib.js",
     "whirlybird/": "https://github.com/apacheli/whirlybird/raw/dev/"
   },
