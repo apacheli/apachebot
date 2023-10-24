@@ -10,17 +10,17 @@ export const details = {
   },
 };
 
-export const handler = async ({ message, args, kwargs }) => {
-  if (message.author.id !== "460612586061430806") {
+export const handler = async (ctx) => {
+  if (ctx.message.author.id !== "460612586061430806") {
     return;
   }
   let result;
   try {
-    result = await eval(args[0]);
+    result = await eval(ctx.args[0]);
   } catch (e) {
     result = e;
   }
-  if (kwargs.silent) {
+  if (ctx.kwargs.silent) {
     console.log(result);
     return;
   }

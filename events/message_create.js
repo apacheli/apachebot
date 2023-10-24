@@ -21,7 +21,7 @@ export const handler = async (bot, message) => {
   } catch (error) {
     await bot.rest.createMessage(message.channel_id, {
       body: {
-        content: `An error occurred: \`${error.name}: ${error.message}\``,
+        content: `An error occurred:\n\n\`\`\`ansi\n${error.name}: ${error.message}\n\`\`\``,
       },
     });
   }

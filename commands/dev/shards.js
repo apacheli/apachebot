@@ -6,21 +6,12 @@ export const details = {
 };
 
 export const handler = ({ bot }) => {
-  const fields = [];
+  let str = "";
   let i = 0;
+  let average = 0;
   for (const shard of bot.gateway.shards.values()) {
-    fields.push({
-      name: `Shard ${i++}`,
-      value: `${shard.latency} ms`,
-    });
+    str += `Shard ${i++}: ${shard.latency} ms\n`;
+    average += shard.latency;
   }
-  const embed = {
-    title: "Shards",
-    fields,
-  };
-  return {
-    body: {
-      embeds: [embed],
-    },
-  };
+  return `\`\`\`\n${str}\nAverage: ${average / i} ms\`\`\``;
 };
