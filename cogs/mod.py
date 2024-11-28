@@ -2,7 +2,12 @@ import asyncio
 import datetime
 import discord
 from discord.ext import commands
+import math
 import re
+
+
+ONE_DAY = datetime.timedelta(hours=24)
+SEVEN_DAYS = datetime.timedelta(days=7)
 
 
 def parse_time(time, delta=True):
@@ -49,13 +54,8 @@ class Moderation(commands.Cog):
         s = "" if n == 1 else "s"
         if not confirm:
             return await confirm.respond(":x: Operation aborted.")
-        response = await confirm.respond(f":hourglass: Banning **{n}** member{s}...")
-        for user in users:
-            try:
-                await ctx.guild.ban(user)
-            except discord.HTTPException:
-                pass
-        await response.edit(content=f":white_check_mark: Banned **{n}** member{s}.")
+        await ctx.guild.bulk_ban(users)
+        await ctx.reply(f":white_check_mark: Banned **{n}** member{s}.")
 
     @commands.command()
     @commands.bot_has_permissions(ban_members=True)
@@ -75,11 +75,11 @@ class Moderation(commands.Cog):
                 conditions += 1
             if re.search(r"\d{5,}$", member.name):
                 conditions += 1
-            if now - member.created_at < datetime.timedelta(days=7):
+            if now - member.created_at < SEVEN_DAYS:
                 conditions += 1
                 if len(member.roles) < 2:
                     conditions += 1
-            if now - member.joined_at < datetime.timedelta(hours=24):
+            if now - member.joined_at < ONE_DAY:
                 conditions += 1
                 if ctx.guild.premium_subscriber_role in member.roles:
                     conditions += 2
@@ -93,9 +93,8 @@ class Moderation(commands.Cog):
         confirm = await ctx.confirm(delete=True, content=f"```\n{c}\n```\n\n:question: Ban **{n}** member{s}? [y/n]")
         if not confirm:
             return await confirm.respond(":x: Operation aborted.")
-        response = await confirm.respond(f":hourglass: **{n}** member{s}...")
         await ctx.guild.bulk_ban(members, reason=reason)
-        await response.edit(content=f":white_check_mark: Banned **{n}** member{s}.")
+        await ctx.reply(f":white_check_mark: Banned **{n}** member{s}.")
 
     @commands.command()
     @commands.bot_has_permissions(ban_members=True)
@@ -134,7 +133,7 @@ class Moderation(commands.Cog):
         await member.timeout(None, reason=reason)
         await ctx.reply(f":white_check_mark: Removed timeout for {member.name}.")
 
-    @commands.command()
+    @commands.command(aliases=["purge"])
     @commands.bot_has_permissions(manage_messages=True)
     @commands.has_permissions(manage_messages=True)
     @commands.guild_only()
@@ -150,7 +149,7 @@ class Moderation(commands.Cog):
         await ctx.channel.purge(limit=limit, reason=reason)
         await ctx.send(content=f":white_check_mark: Deleted **{limit}** message{s}.", delete_after=5)
 
-    @commands.command()
+    @commands.command(aliases=["close"])
     @commands.bot_has_permissions(manage_channels=True)
     @commands.has_permissions(manage_channels=True)
     @commands.guild_only()
@@ -163,7 +162,7 @@ class Moderation(commands.Cog):
         await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite, reason=reason)
         await ctx.reply(f":lock: Locked {ctx.channel.name}.")
 
-    @commands.command()
+    @commands.command(aliases=["open"])
     @commands.bot_has_permissions(manage_channels=True)
     @commands.has_permissions(manage_channels=True)
     @commands.guild_only()
@@ -172,11 +171,52 @@ class Moderation(commands.Cog):
         overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
         if overwrite.send_messages:
             return
-        overwrite.send_messages = True
+        overwrite.send_messages = None
         await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite, reason=reason)
         await ctx.reply(f":key: Unlocked {ctx.channel.name}.")
 
     @commands.command()
+    @commands.bot_has_permissions(manage_guild=True)
+    @commands.has_permissions(manage_guild=True)
+    @commands.guild_only()
+    async def lockdown(self, ctx: commands.Context, until, *, reason = None):
+        """Disable messages and invites"""
+        if not ctx.guild.default_role.permissions.send_messages:
+            return
+        permissions = discord.Permissions(
+            add_reactions=False,
+            send_messages=False,
+        )
+        await ctx.guild.default_role.edit(permissions=permissions, reason=reason)
+        delay = datetime.datetime.now(datetime.timezone.utc) + parse_time(until, True)
+        await ctx.guild.edit(
+            dms_disabled_until=delay,
+            invites_disabled=True,
+            reason=reason,
+        )
+        await ctx.reply(f":warning: Lockdown active until <t:{math.floor(delay.timestamp())}>.")
+
+    @commands.command(aliases=["lockup"])
+    @commands.bot_has_permissions(manage_guild=True)
+    @commands.has_permissions(manage_guild=True)
+    @commands.guild_only()
+    async def unlockdown(self, ctx: commands.Context, *, reason = None):
+        """Disable the lockdown"""
+        if ctx.guild.default_role.permissions.send_messages:
+            return
+        permissions = discord.Permissions(
+            add_reactions=None,
+            send_messages=None,
+        )
+        await ctx.guild.default_role.edit(permissions=permissions, reason=reason)
+        await ctx.guild.edit(
+            dms_disabled_until=None,
+            invites_disabled=False,
+            reason=reason,
+        )
+        await ctx.reply(":warning: Lockdown disabled.")
+
+    @commands.command(aliases=["slow"])
     @commands.bot_has_permissions(manage_channels=True)
     @commands.has_permissions(manage_channels=True)
     @commands.guild_only()
