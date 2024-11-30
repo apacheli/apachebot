@@ -1,5 +1,4 @@
 [bot]
-bot_token =
 command_prefix = !
 # online | idle | dnd | invisible
 status = dnd

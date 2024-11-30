@@ -95,7 +95,7 @@ class Apachengine(commands.AutoShardedBot):
         for cog in cogs:
             await self.load_extension(f"cogs.{cog}")
         async with self:
-            await super().start(self.config["bot"]["bot_token"])
+            await super().start(os.getenv("BOT_TOKEN"))
 
     async def on_command_error(self, ctx: commands.Context, error):
         await super().on_command_error(ctx, error)
