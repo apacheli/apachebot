@@ -110,7 +110,7 @@ class Apachengine(commands.AutoShardedBot):
         for cog in cogs:
             await self.load_extension(f"cogs.{cog}")
         async with self:
-            await super().start(os.getenv("BOT_TOKEN"))
+            await super().start(self.config["bot"]["bot_token"] or os.getenv("BOT_TOKEN"))
 
     def parse_time(self, time, delta=True):
         time_units = {
