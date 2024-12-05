@@ -1,9 +1,14 @@
 import asyncio
+import asyncpg
 import configparser
 from enum import Enum
+import datetime
 import discord
 from discord.ext import commands
 import os
+import psutil
+import re
+
 
 cogs = (
     "dev",
@@ -20,6 +25,7 @@ activity_types = {
     "custom": discord.ActivityType.custom,
     "competing": discord.ActivityType.competing,
 }
+
 
 class Confirmation:
     def __init__(self, ctx: commands.Context, question: discord.Message, answer: discord.Message):
@@ -63,17 +69,18 @@ class ApacheContext(commands.Context):
 
 
 class Apachengine(commands.AutoShardedBot):
-    def __init__(self):
-        config = configparser.ConfigParser()
-        config.read("config.ini")
+    def __init__(self, config, db):
         self.config = config
+        self.db = db
+        self.ready_at = None
+        self.process = psutil.Process()
         activity_name = config["activity"]["name"]
         activity_type = activity_types[config["activity"]["type"]]
         activity = discord.Activity(
             name="Custom Status" if discord.ActivityType == discord.ActivityType.custom else activity_name,
             type=activity_type,
             url=config["activity"]["url"] if activity_type == discord.ActivityType.streaming else None,
-            state=activity_name if activity_type == discord.ActivityType.custom else None
+            state=activity_name if activity_type == discord.ActivityType.custom else None,
         )
         allowed_mentions = discord.AllowedMentions.none()
         intents = discord.Intents.all()
@@ -87,8 +94,16 @@ class Apachengine(commands.AutoShardedBot):
             status=config["bot"]["status"],
         )
 
+    async def on_ready(self):
+        self.ready_at = datetime.datetime.now()
+
     async def get_context(self, message, *, cls = ApacheContext):
         return await super().get_context(message, cls=cls)
+
+    async def on_command_error(self, ctx: commands.Context, error):
+        await super().on_command_error(ctx, error)
+        if isinstance(error, commands.BotMissingPermissions):
+            await ctx.reply(f":x: I am missing permissions:\n\n- {"\n- ".join(error.missing_permissions)}")
 
     async def start(self):
         discord.utils.setup_logging()
@@ -97,15 +112,32 @@ class Apachengine(commands.AutoShardedBot):
         async with self:
             await super().start(os.getenv("BOT_TOKEN"))
 
-    async def on_command_error(self, ctx: commands.Context, error):
-        await super().on_command_error(ctx, error)
-        if isinstance(error, commands.BotMissingPermissions):
-            await ctx.reply(f":x: I am missing permissions:\n\n- {"\n- ".join(error.missing_permissions)}")
+    def parse_time(self, time, delta=True):
+        time_units = {
+            "d": 86400,
+            "h": 3600,
+            "m": 60,
+            "s": 1,
+        }
+        pattern = r"(\d+)([dhms])"
+        matches = re.findall(pattern, time)
+        seconds = sum(int(n) * time_units[u] for n, u in matches)
+        return datetime.timedelta(seconds=seconds) if delta else seconds
 
-def main():
-    bot = Apachengine()
-    asyncio.run(bot.start())
+
+async def main():
+    config = configparser.ConfigParser()
+    config.read("config.ini")
+    db = await asyncpg.create_pool(
+        user=config["db"]["user"] or os.getenv("DB_USER"),
+        password=config["db"]["password"] or os.getenv("DB_PASSWORD"),
+        database=config["db"]["database"] or os.getenv("DB_DATABASE"),
+        host=config["db"]["host"] or os.getenv("DB_HOST"),
+        port=config["db"]["port"] or os.getenv("DB_PORT"),
+    )
+    bot = Apachengine(config=config, db=db)
+    await bot.start()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

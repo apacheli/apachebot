@@ -6,26 +6,29 @@ import math
 import re
 
 
+ONE_WEEK = datetime.timedelta(days=7)
 ONE_DAY = datetime.timedelta(hours=24)
-SEVEN_DAYS = datetime.timedelta(days=7)
-
-
-def parse_time(time, delta=True):
-    time_units = {
-        "d": 86400,
-        "h": 3600,
-        "m": 60,
-        "s": 1,
-    }
-    pattern = r"(\d+)([dhms])"
-    matches = re.findall(pattern, time)
-    seconds = sum(int(n) * time_units[u] for n, u in matches)
-    if delta:
-        return datetime.timedelta(seconds=seconds)
-    return seconds
 
 
 class Moderation(commands.Cog):
+    def _rank_member_suspicion(self, ctx: commands.Context, member, now):
+        if member.bot or member.guild_permissions.ban_members:
+            return 0
+        conditions = 0
+        if member.public_flags.spammer:
+            conditions += 3
+        if member.avatar == None:
+            conditions += 1
+        if re.search(r"\d{5,}$", member.name):
+            conditions += 1
+        if now - member.created_at < ONE_WEEK:
+            conditions += 1
+        if now - member.joined_at < ONE_DAY:
+            conditions += 1
+            if member.premium_since != None:
+                conditions += 1
+        return conditions
+
     @commands.command()
     @commands.bot_has_permissions(kick_members=True)
     @commands.has_permissions(kick_members=True)
@@ -52,49 +55,45 @@ class Moderation(commands.Cog):
         """Ban multiple members from the server"""
         n = len(users)
         s = "" if n == 1 else "s"
+        confirm = await ctx.confirm(delete=True, content=f"```\n{c}\n```\n\n:question: Ban **{n}** member{s}? [y/n]")
         if not confirm:
             return await confirm.respond(":x: Operation aborted.")
         await ctx.guild.bulk_ban(users)
         await ctx.reply(f":white_check_mark: Banned **{n}** member{s}.")
 
-    @commands.command()
+    @commands.command(aliases=["bulkban"])
     @commands.bot_has_permissions(ban_members=True)
     @commands.has_permissions(ban_members=True)
     @commands.guild_only()
     async def massban(self, ctx: commands.Context, *, reason = None):
         """Ban suspicious members from the server"""
         now = datetime.datetime.now(datetime.timezone.utc)
-        members = []
-        for member in ctx.guild.members:
-            if member.bot or member.guild_permissions.ban_members:
-                continue
-            conditions = 0
-            if member.public_flags.spammer:
-                conditions += 2
-            if member.avatar == None:
-                conditions += 1
-            if re.search(r"\d{5,}$", member.name):
-                conditions += 1
-            if now - member.created_at < SEVEN_DAYS:
-                conditions += 1
-                if len(member.roles) < 2:
-                    conditions += 1
-            if now - member.joined_at < ONE_DAY:
-                conditions += 1
-                if ctx.guild.premium_subscriber_role in member.roles:
-                    conditions += 2
-            if conditions > 3:
-                members.append(member)
+        members = [m for m in ctx.guild.members if self._rank_member_suspicion(ctx, m, now) > 3]
         n = len(members)
         if n == 0:
             return await ctx.reply(":detective: No members detected.")
         s = "" if n == 1 else "s"
-        c = "Too many members to list." if n > 20 else "\n".join([f"{m.name} ({m.id})" for m in members])
+        c = "Too many members to list." if n > 25 else "\n".join([f"{m.name} ({m.id})" for m in members])
         confirm = await ctx.confirm(delete=True, content=f"```\n{c}\n```\n\n:question: Ban **{n}** member{s}? [y/n]")
         if not confirm:
             return await confirm.respond(":x: Operation aborted.")
         await ctx.guild.bulk_ban(members, reason=reason)
         await ctx.reply(f":white_check_mark: Banned **{n}** member{s}.")
+
+    @commands.command(aliases=["suspicious"])
+    @commands.guild_only()
+    async def sus(self, ctx: commands.Context, user: discord.Member = None):
+        """Show suspicious members in a server"""
+        now = datetime.datetime.now(datetime.timezone.utc)
+        if user:
+            sus_rank = self._rank_member_suspicion(ctx, user, now)
+            return await ctx.reply(f":detective: {user.name} has a suspicious ranking of **{sus_rank}**.")
+        members = [m for m in ctx.guild.members if self._rank_member_suspicion(ctx, m, now) > 3]
+        n = len(members)
+        if n == 0:
+            return await ctx.reply(":detective: No members detected.")
+        c = "Too many members to list." if n > 25 else "\n".join([f"{m.name} ({m.id})" for m in members])
+        await ctx.reply(f"```\n{c}\n```\n\n:detective: **{n}** member{"" if n == 1 else "s"} {"is" if n == 1 else "are"} suspicious.")
 
     @commands.command()
     @commands.bot_has_permissions(ban_members=True)
@@ -121,15 +120,19 @@ class Moderation(commands.Cog):
     @commands.guild_only()
     async def mute(self, ctx: commands.Context, member: discord.Member, until, *, reason = None):
         """Mute a member"""
-        await member.timeout(parse_time(until), reason=reason)
+        if member.is_timed_out:
+            return
+        await member.timeout(ctx.bot.parse_time(until), reason=reason)
         await ctx.reply(f":white_check_mark: Timed out {member.name}.")
 
-    @commands.command()
+    @commands.command(aliases=["untimeout"])
     @commands.bot_has_permissions(moderate_members=True)
     @commands.has_permissions(moderate_members=True)
     @commands.guild_only()
     async def unmute(self, ctx: commands.Context, member: discord.Member, *, reason = None):
         """Unmute a member"""
+        if not member.is_timed_out:
+            return
         await member.timeout(None, reason=reason)
         await ctx.reply(f":white_check_mark: Removed timeout for {member.name}.")
 
@@ -188,7 +191,7 @@ class Moderation(commands.Cog):
             send_messages=False,
         )
         await ctx.guild.default_role.edit(permissions=permissions, reason=reason)
-        delay = datetime.datetime.now(datetime.timezone.utc) + parse_time(until, True)
+        delay = datetime.datetime.now(datetime.timezone.utc) + ctx.bot.parse_time(until, True)
         await ctx.guild.edit(
             dms_disabled_until=delay,
             invites_disabled=True,
@@ -223,7 +226,7 @@ class Moderation(commands.Cog):
     async def slowmode(self, ctx: commands.Context, delay = None, *, reason = None):
         """Enable slowmode for the channel"""
         if delay != None:
-            slowmode_delay = parse_time(delay, False)
+            slowmode_delay = ctx.bot.parse_time(delay, False)
         else:
             slowmode_delay = 5 if ctx.channel.slowmode_delay == 0 else 0
         await ctx.channel.edit(slowmode_delay=slowmode_delay, reason=reason)
@@ -256,6 +259,8 @@ class Moderation(commands.Cog):
     @commands.guild_only()
     async def nick(self, ctx: commands.Context, member: discord.Member, *, nick):
         """Set a member's nickname"""
+        if member.nick == nick:
+            return
         await member.edit(nick=nick)
         await ctx.message.add_reaction("\N{WHITE HEAVY CHECK MARK}")
 
@@ -265,6 +270,8 @@ class Moderation(commands.Cog):
     @commands.guild_only()
     async def clearnick(self, ctx: commands.Context, member: discord.Member):
         """Clear a member's nickname"""
+        if member.nick == None:
+            return
         await member.edit(nick=None)
         await ctx.message.add_reaction("\N{WHITE HEAVY CHECK MARK}")
 
@@ -274,6 +281,8 @@ class Moderation(commands.Cog):
     @commands.guild_only()
     async def pin(self, ctx: commands.Context, message: discord.Message, *, reason = None):
         """Pin a message"""
+        if message.pinned:
+            return
         await message.pin(reason=reason)
         await ctx.message.add_reaction("\N{WHITE HEAVY CHECK MARK}")
 
@@ -283,6 +292,8 @@ class Moderation(commands.Cog):
     @commands.guild_only()
     async def unpin(self, ctx: commands.Context, message: discord.Message, *, reason = None):
         """Unpin a message"""
+        if not message.pinned:
+            return
         await message.unpin(reason=reason)
         await ctx.message.add_reaction("\N{WHITE HEAVY CHECK MARK}")
 

@@ -1,10 +1,11 @@
-import asyncio
 import discord
 from discord.ext import commands
 
 
 class Entertainment(commands.Cog):
-    pass
+    @commands.command()
+    async def roll(self, ctx):
+        pass
 
 
 async def setup(bot):

@@ -1,10 +1,16 @@
 [bot]
 command_prefix = !
-# online | idle | dnd | invisible
-status = dnd
+color = FF0000
+status = online
+
+[db]
+user = postgres
+password = helloworld
+database = postgres
+host = localhost
+port = 1234
 
 [activity]
-name = a really good game
-# playing | streaming | listening | watching | custom | competing
+name = a cool game
 type = playing
 url =
