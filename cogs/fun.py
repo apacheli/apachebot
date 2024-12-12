@@ -3,9 +3,7 @@ from discord.ext import commands
 
 
 class Entertainment(commands.Cog):
-    @commands.command()
-    async def roll(self, ctx):
-        pass
+    pass
 
 
 async def setup(bot):

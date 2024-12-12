@@ -2,32 +2,139 @@ import asyncio
 import datetime
 import discord
 from discord.ext import commands
+from discord.ui import Button, Modal, View, button, TextInput
+import json
 import math
 import re
+from string import Template
+
+from models.guild_config import GuildConfig
 
 
 ONE_WEEK = datetime.timedelta(days=7)
 ONE_DAY = datetime.timedelta(hours=24)
 
 
+def _on_member_join_embed(config, member):
+    subs = {
+        "user": member.name,
+        "server": member.guild.name,
+        "members": member.guild.member_count,
+    }
+    embed = discord.Embed(
+        color=config.theme_color,
+        description=Template(config.welcome_description).substitute(subs),
+        timestamp=datetime.datetime.now(),
+    )
+    embed.set_author(name=Template(config.welcome_title).substitute(subs), icon_url=member.avatar.url)
+    embed.set_image(url=config.welcome_image)
+    embed.set_footer(text=Template(config.welcome_footer).substitute(subs))
+    return embed
+
+
+def _rank_member_suspicion(ctx: commands.Context, member, now):
+    if member.bot or member.guild_permissions.ban_members:
+        return 0
+    conditions = 0
+    if member.public_flags.spammer:
+        conditions += 3
+    if member.avatar == None:
+        conditions += 1
+    if re.search(r"\d{5,}$", member.name):
+        conditions += 1
+    if now - member.created_at < ONE_WEEK:
+        conditions += 1
+    if now - member.joined_at < ONE_DAY:
+        conditions += 1
+        if member.premium_since != None:
+            conditions += 1
+    return conditions
+
+
+class JoinLogConfigureModal(Modal):
+    def __init__(self, view, previous_interaction: discord.Interaction, config):
+        super().__init__(title=f"Configure Join Log for {view.ctx.guild.name}")
+        self.channel = TextInput(
+            label="Channel ID",
+            placeholder=view.ctx.guild._public_updates_channel_id,
+            required=False,
+            max_length=25,
+            min_length=15,
+            default=config.join_log,
+        )
+        self.welcome_title = TextInput(
+            label="Welcome Title",
+            placeholder="Hello, $user!",
+            max_length=100,
+            default=config.welcome_title,
+        )
+        self.welcome_description = TextInput(
+            label="Welcome Description",
+            style=discord.TextStyle.long,
+            placeholder="Welcome to $server.",
+            required=False,
+            max_length=200,
+            default=config.welcome_description,
+        )
+        self.welcome_image = TextInput(
+            label="Welcome Image",
+            placeholder="https://example.com/image.png",
+            required=False,
+            max_length=100,
+            default=config.welcome_image,
+        )
+        self.welcome_footer = TextInput(
+            label="Welcome Footer",
+            placeholder="$members members",
+            required=False,
+            max_length=100,
+            default=config.welcome_footer,
+        )
+        self.add_item(self.channel)
+        self.add_item(self.welcome_title)
+        self.add_item(self.welcome_description)
+        self.add_item(self.welcome_image)
+        self.add_item(self.welcome_footer)
+        self.view = view
+        self.previous_interaction = previous_interaction
+
+    async def on_submit(self, interaction: discord.Interaction):
+        channel = self.view.ctx.bot.get_channel(int(self.channel.value)) if self.channel.value.isdigit() else None
+        if channel == None or channel.guild.id != self.view.ctx.guild.id or channel.type != discord.ChannelType.text:
+            return await interaction.response.send_message(":x: Invalid channel provided. Please try again.", ephemeral=True)
+        _fake_config = await self.view.ctx.bot.update_guild_config(
+            self.view.ctx.guild,
+            join_log=channel.id,
+            welcome_title=self.welcome_title.value,
+            welcome_description=self.welcome_description.value,
+            welcome_image=self.welcome_image.value,
+            welcome_footer=self.welcome_footer.value,
+        )
+        await self.previous_interaction.edit_original_response(view=self.view)
+        await interaction.response.send_message(
+            f":white_check_mark: Set the join log to <#{channel.id}>. Your join log will look like this:",
+            embed=_on_member_join_embed(_fake_config, interaction.user),
+        )
+
+
+class JoinLogConfigure(View):
+    def __init__(self, ctx: commands.Context):
+        super().__init__()
+        self.ctx = ctx
+
+    @button(style=discord.ButtonStyle.secondary, label="Configure", emoji="\N{GEAR}")
+    async def button_callback(self, interaction: discord.Interaction, btn: Button):
+        config = await self.ctx.bot.get_guild_config(self.ctx.guild)
+        await interaction.response.send_modal(JoinLogConfigureModal(self, interaction, config))
+        btn.disabled = True
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        return interaction.user.id == self.ctx.author.id
+
+
 class Moderation(commands.Cog):
-    def _rank_member_suspicion(self, ctx: commands.Context, member, now):
-        if member.bot or member.guild_permissions.ban_members:
-            return 0
-        conditions = 0
-        if member.public_flags.spammer:
-            conditions += 3
-        if member.avatar == None:
-            conditions += 1
-        if re.search(r"\d{5,}$", member.name):
-            conditions += 1
-        if now - member.created_at < ONE_WEEK:
-            conditions += 1
-        if now - member.joined_at < ONE_DAY:
-            conditions += 1
-            if member.premium_since != None:
-                conditions += 1
-        return conditions
+    def __init__(self, bot: commands.AutoShardedBot):
+        self.bot = bot
 
     @commands.command()
     @commands.bot_has_permissions(kick_members=True)
@@ -68,7 +175,7 @@ class Moderation(commands.Cog):
     async def massban(self, ctx: commands.Context, *, reason = None):
         """Ban suspicious members from the server"""
         now = datetime.datetime.now(datetime.timezone.utc)
-        members = [m for m in ctx.guild.members if self._rank_member_suspicion(ctx, m, now) > 3]
+        members = [m for m in ctx.guild.members if _rank_member_suspicion(ctx, m, now) > 3]
         n = len(members)
         if n == 0:
             return await ctx.reply(":detective: No members detected.")
@@ -86,9 +193,9 @@ class Moderation(commands.Cog):
         """Show suspicious members in a server"""
         now = datetime.datetime.now(datetime.timezone.utc)
         if user:
-            sus_rank = self._rank_member_suspicion(ctx, user, now)
+            sus_rank = _rank_member_suspicion(ctx, user, now)
             return await ctx.reply(f":detective: {user.name} has a suspicious ranking of **{sus_rank}**.")
-        members = [m for m in ctx.guild.members if self._rank_member_suspicion(ctx, m, now) > 3]
+        members = [m for m in ctx.guild.members if _rank_member_suspicion(ctx, m, now) > 3]
         n = len(members)
         if n == 0:
             return await ctx.reply(":detective: No members detected.")
@@ -122,7 +229,7 @@ class Moderation(commands.Cog):
         """Mute a member"""
         if member.is_timed_out:
             return
-        await member.timeout(ctx.bot.parse_time(until), reason=reason)
+        await member.timeout(self.bot.parse_time(until), reason=reason)
         await ctx.reply(f":white_check_mark: Timed out {member.name}.")
 
     @commands.command(aliases=["untimeout"])
@@ -191,7 +298,7 @@ class Moderation(commands.Cog):
             send_messages=False,
         )
         await ctx.guild.default_role.edit(permissions=permissions, reason=reason)
-        delay = datetime.datetime.now(datetime.timezone.utc) + ctx.bot.parse_time(until, True)
+        delay = datetime.datetime.now(datetime.timezone.utc) + self.bot.parse_time(until, True)
         await ctx.guild.edit(
             dms_disabled_until=delay,
             invites_disabled=True,
@@ -208,8 +315,8 @@ class Moderation(commands.Cog):
         if ctx.guild.default_role.permissions.send_messages:
             return
         permissions = discord.Permissions(
-            add_reactions=None,
-            send_messages=None,
+            add_reactions=True,
+            send_messages=True,
         )
         await ctx.guild.default_role.edit(permissions=permissions, reason=reason)
         await ctx.guild.edit(
@@ -226,7 +333,7 @@ class Moderation(commands.Cog):
     async def slowmode(self, ctx: commands.Context, delay = None, *, reason = None):
         """Enable slowmode for the channel"""
         if delay != None:
-            slowmode_delay = ctx.bot.parse_time(delay, False)
+            slowmode_delay = self.bot.parse_time(delay, False)
         else:
             slowmode_delay = 5 if ctx.channel.slowmode_delay == 0 else 0
         await ctx.channel.edit(slowmode_delay=slowmode_delay, reason=reason)
@@ -332,6 +439,36 @@ class Moderation(commands.Cog):
         )
         await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite, reason=reason)
         await ctx.reply(f":unlock: Disabled restrictions for {ctx.channel.name}.")
+
+    @commands.command(aliases=["guildconfig", "server_config", "serverconfig"])
+    @commands.guild_only()
+    async def guild_config(self, ctx: commands.Context):
+        """Show the server configuration"""
+        config = await self.bot.get_guild_config(ctx.guild)
+        await ctx.reply(f"```json\n{json.dumps(dict(config), indent=4)}\n```")
+
+    @commands.command(aliases=["joinlog"])
+    @commands.has_permissions(administrator=True)
+    @commands.guild_only()
+    @commands.cooldown(5, 3600, commands.BucketType.guild)
+    async def join_log(self, ctx: commands.Context):
+        """Set the join log for this server"""
+        config = await self.bot.get_guild_config(ctx.guild)
+        if config.join_log:
+            return await ctx.reply(f":speech_balloon: The join log for this server is <#{config.join_log}>.", view=JoinLogConfigure(ctx))
+        return await ctx.reply(f":speech_balloon: There is no join log for this server. Click **:gear: Configure** to get started.", view=JoinLogConfigure(ctx))
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
+        if not member.guild.me.guild_permissions.manage_roles:
+            return
+        config = await self.bot.get_guild_config(member.guild)
+        if config.join_log == None:
+            return
+        channel = self.bot.get_channel(config.join_log)
+        if channel == None or not channel.permissions_for(member.guild.me).send_messages:
+            return
+        await channel.send(embed=_on_member_join_embed(config, member))
 
 
 async def setup(bot):

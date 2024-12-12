@@ -8,6 +8,10 @@ from discord.ext import commands
 import os
 import psutil
 import re
+import redis
+from tortoise import Tortoise
+
+from models.guild_config import GuildConfig
 
 
 cogs = (
@@ -27,8 +31,15 @@ activity_types = {
 }
 
 
+async def send_messages_check(ctx: commands.Context):
+    if ctx.guild == None:
+        return True
+    permissions = ctx.channel.permissions_for(ctx.guild.me)
+    return permissions.send_messages and permissions.read_message_history
+
+
 class Confirmation:
-    def __init__(self, ctx: commands.Context, question: discord.Message, answer: discord.Message):
+    def __init__(self, ctx: commands.Context, question: discord.Message = None, answer: discord.Message = None):
         self.ctx = ctx
         self.question = question
         self.answer = answer
@@ -59,19 +70,19 @@ class ApacheContext(commands.Context):
             answer = await self.bot.wait_for("message", check=check, timeout=timeout)
             if delete:
                 await question.delete()
-                return Confirmation(self, None, answer)
+                return Confirmation(self, answer=answer)
             return Confirmation(self, question, answer)
         except asyncio.TimeoutError:
             if delete:
                 await question.delete()
-                return Confirmation(self, None, None)
-            return Confirmation(self, question, None)
+                return Confirmation(self)
+            return Confirmation(self, question=question)
 
 
 class Apachengine(commands.AutoShardedBot):
-    def __init__(self, config, db):
+    def __init__(self, config, redis):
         self.config = config
-        self.db = db
+        self.redis = redis
         self.ready_at = None
         self.process = psutil.Process()
         activity_name = config["activity"]["name"]
@@ -93,9 +104,27 @@ class Apachengine(commands.AutoShardedBot):
             intents=intents,
             status=config["bot"]["status"],
         )
+        self.add_check(send_messages_check)
 
     async def on_ready(self):
         self.ready_at = datetime.datetime.now()
+
+    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
+        if payload.guild_id == None:
+            return
+        guild = self.get_guild(payload.guild_id)
+        if guild == None:
+            return
+        if not guild.me.guild_permissions.manage_messages:
+            return
+        if not payload.member.guild_permissions.manage_messages:
+            return
+        channel = self.get_channel(payload.channel_id)
+        message = channel.get_partial_message(payload.message_id)
+        if payload.emoji == discord.PartialEmoji(name="\N{PUSHPIN}"):
+            await message.pin()
+        elif payload.emoji == discord.PartialEmoji(name="\N{CROSS MARK}"):
+            await message.delete()
 
     async def get_context(self, message, *, cls = ApacheContext):
         return await super().get_context(message, cls=cls)
@@ -103,7 +132,7 @@ class Apachengine(commands.AutoShardedBot):
     async def on_command_error(self, ctx: commands.Context, error):
         await super().on_command_error(ctx, error)
         if isinstance(error, commands.BotMissingPermissions):
-            await ctx.reply(f":x: I am missing permissions:\n\n- {"\n- ".join(error.missing_permissions)}")
+            await ctx.reply(f":x: I am missing permissions:\n\n- `{"\n- `".join(error.missing_permissions)}`")
 
     async def start(self):
         discord.utils.setup_logging()
@@ -124,18 +153,48 @@ class Apachengine(commands.AutoShardedBot):
         seconds = sum(int(n) * time_units[u] for n, u in matches)
         return datetime.timedelta(seconds=seconds) if delta else seconds
 
+    async def get_guild_config(self, guild: discord.Guild):
+        redis_name = f"guild_configs:{guild.id}"
+        cached = self.redis.hgetall(redis_name)
+        if cached:
+            return GuildConfig(**cached)
+        config = await GuildConfig.get_or_none(id=guild.id)
+        if config:
+            mapping = {k: v for k in config._meta.fields if (v := getattr(config, k)) != None}
+            self.redis.hset(redis_name, mapping=mapping)
+            self.redis.expire(redis_name, 86400)
+            return config
+        return GuildConfig(id=guild.id)
+
+    async def update_guild_config(self, guild: discord.Guild, **kwargs):
+        redis_name = f"guild_configs:{guild.id}"
+        if self.redis.exists(redis_name):
+            self.redis.hset(redis_name, mapping=kwargs)
+        await GuildConfig.update_or_create(id=guild.id, defaults=kwargs)
+        # Return a fake object because it's not worth making two requests
+        return GuildConfig(**kwargs)
+
 
 async def main():
     config = configparser.ConfigParser()
-    config.read("config.ini")
-    db = await asyncpg.create_pool(
-        user=config["db"]["user"] or os.getenv("DB_USER"),
-        password=config["db"]["password"] or os.getenv("DB_PASSWORD"),
-        database=config["db"]["database"] or os.getenv("DB_DATABASE"),
-        host=config["db"]["host"] or os.getenv("DB_HOST"),
-        port=config["db"]["port"] or os.getenv("DB_PORT"),
+    config.read("config.local.ini")
+    user = config["db"]["user"] or os.getenv("DB_USER")
+    password = config["db"]["password"] or os.getenv("DB_PASSWORD")
+    database = config["db"]["database"] or os.getenv("DB_DATABASE")
+    host = config["db"]["host"] or os.getenv("DB_HOST")
+    port = config["db"]["port"] or os.getenv("DB_PORT")
+    await Tortoise.init(
+        db_url=f"postgres://{user}:{password}@{host}:{port}/{database}",
+        modules={"models": ["models.guild_config"]},
     )
-    bot = Apachengine(config=config, db=db)
+    await Tortoise.generate_schemas()
+    r = redis.Redis(
+        host=config["redis"]["host"] or os.getenv("REDIS_HOST"),
+        port=config["redis"]["port"] or os.getenv("REDIS_PORT"),
+        db=0,
+        decode_responses=True,
+    )
+    bot = Apachengine(config=config, redis=r)
     await bot.start()
 
 
