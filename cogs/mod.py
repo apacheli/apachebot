@@ -2,7 +2,7 @@ import asyncio
 import datetime
 import discord
 from discord.ext import commands
-from discord.ui import Button, Modal, View, button, TextInput
+from discord.ui import button, Button, Modal, TextInput, View
 import json
 import math
 import re
@@ -15,20 +15,23 @@ ONE_WEEK = datetime.timedelta(days=7)
 ONE_DAY = datetime.timedelta(hours=24)
 
 
-def _on_member_join_embed(config, member):
-    subs = {
-        "user": member.name,
+def _format(string, keys):
+    return Template(string).substitute(keys)
+
+
+def _on_member_join_embed(config, member: discord.Member):
+    keys = {
+        "user": member.global_name or member.name,
+        "avatar": member.display_avatar.url,
         "server": member.guild.name,
         "members": member.guild.member_count,
     }
     embed = discord.Embed(
-        color=config.theme_color,
-        description=Template(config.welcome_description).substitute(subs),
-        timestamp=datetime.datetime.now(),
+        description=_format(config.welcome_description, keys),
     )
-    embed.set_author(name=Template(config.welcome_title).substitute(subs), icon_url=member.avatar.url)
-    embed.set_image(url=config.welcome_image)
-    embed.set_footer(text=Template(config.welcome_footer).substitute(subs))
+    embed.set_author(name=_format(config.welcome_title, keys), icon_url=member.display_avatar.url)
+    embed.set_image(url=_format(config.welcome_image, keys))
+    embed.set_footer(text=_format(config.welcome_footer, keys))
     return embed
 
 
@@ -56,16 +59,16 @@ class JoinLogConfigureModal(Modal):
         super().__init__(title=f"Configure Join Log for {view.ctx.guild.name}")
         self.channel = TextInput(
             label="Channel ID",
-            placeholder=view.ctx.guild._public_updates_channel_id,
+            placeholder="12345678901234567890",
             required=False,
-            max_length=25,
+            max_length=20,
             min_length=15,
             default=config.join_log,
         )
         self.welcome_title = TextInput(
             label="Welcome Title",
             placeholder="Hello, $user!",
-            max_length=100,
+            max_length=200,
             default=config.welcome_title,
         )
         self.welcome_description = TextInput(
@@ -73,21 +76,21 @@ class JoinLogConfigureModal(Modal):
             style=discord.TextStyle.long,
             placeholder="Welcome to $server.",
             required=False,
-            max_length=200,
+            max_length=1000,
             default=config.welcome_description,
         )
         self.welcome_image = TextInput(
             label="Welcome Image",
-            placeholder="https://example.com/image.png",
+            placeholder="$avatar",
             required=False,
-            max_length=100,
+            max_length=200,
             default=config.welcome_image,
         )
         self.welcome_footer = TextInput(
             label="Welcome Footer",
             placeholder="$members members",
             required=False,
-            max_length=100,
+            max_length=200,
             default=config.welcome_footer,
         )
         self.add_item(self.channel)
@@ -99,8 +102,8 @@ class JoinLogConfigureModal(Modal):
         self.previous_interaction = previous_interaction
 
     async def on_submit(self, interaction: discord.Interaction):
-        channel = self.view.ctx.bot.get_channel(int(self.channel.value)) if self.channel.value.isdigit() else None
-        if channel == None or channel.guild.id != self.view.ctx.guild.id or channel.type != discord.ChannelType.text:
+        channel = interaction.guild.get_channel(int(self.channel.value)) if self.channel.value.isdigit() else None
+        if channel == None or channel.type != discord.ChannelType.text:
             return await interaction.response.send_message(":x: Invalid channel provided. Please try again.", ephemeral=True)
         _fake_config = await self.view.ctx.bot.update_guild_config(
             self.view.ctx.guild,
@@ -123,7 +126,7 @@ class JoinLogConfigure(View):
         self.ctx = ctx
 
     @button(style=discord.ButtonStyle.secondary, label="Configure", emoji="\N{GEAR}")
-    async def button_callback(self, interaction: discord.Interaction, btn: Button):
+    async def configure(self, interaction: discord.Interaction, btn: Button):
         config = await self.ctx.bot.get_guild_config(self.ctx.guild)
         await interaction.response.send_modal(JoinLogConfigureModal(self, interaction, config))
         btn.disabled = True
@@ -134,6 +137,7 @@ class JoinLogConfigure(View):
 
 class Moderation(commands.Cog):
     def __init__(self, bot: commands.AutoShardedBot):
+        super().__init__()
         self.bot = bot
 
     @commands.command()
@@ -304,7 +308,7 @@ class Moderation(commands.Cog):
             invites_disabled=True,
             reason=reason,
         )
-        await ctx.reply(f":warning: Lockdown active until <t:{math.floor(delay.timestamp())}>.")
+        await ctx.reply(f":warning: Lockdown active until <t:{math.floor(delay.timestamp())}>. Click **Report Raid** :shield: if there a raid.")
 
     @commands.command(aliases=["lockup"])
     @commands.bot_has_permissions(manage_guild=True)
@@ -441,6 +445,7 @@ class Moderation(commands.Cog):
         await ctx.reply(f":unlock: Disabled restrictions for {ctx.channel.name}.")
 
     @commands.command(aliases=["guildconfig", "server_config", "serverconfig"])
+    @commands.has_permissions(administrator=True)
     @commands.guild_only()
     async def guild_config(self, ctx: commands.Context):
         """Show the server configuration"""
@@ -450,7 +455,6 @@ class Moderation(commands.Cog):
     @commands.command(aliases=["joinlog"])
     @commands.has_permissions(administrator=True)
     @commands.guild_only()
-    @commands.cooldown(5, 3600, commands.BucketType.guild)
     async def join_log(self, ctx: commands.Context):
         """Set the join log for this server"""
         config = await self.bot.get_guild_config(ctx.guild)
@@ -466,9 +470,8 @@ class Moderation(commands.Cog):
         if config.join_log == None:
             return
         channel = self.bot.get_channel(config.join_log)
-        if channel == None or not channel.permissions_for(member.guild.me).send_messages:
-            return
-        await channel.send(embed=_on_member_join_embed(config, member))
+        if channel and channel.permissions_for(member.guild.me).send_messages:
+            await channel.send(embed=_on_member_join_embed(config, member))
 
 
 async def setup(bot):

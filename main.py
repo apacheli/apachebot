@@ -5,6 +5,7 @@ from enum import Enum
 import datetime
 import discord
 from discord.ext import commands
+from discord.ui import Button, button, View
 import os
 import psutil
 import re
@@ -35,7 +36,65 @@ async def send_messages_check(ctx: commands.Context):
     if ctx.guild == None:
         return True
     permissions = ctx.channel.permissions_for(ctx.guild.me)
-    return permissions.send_messages and permissions.read_message_history
+    return permissions.send_messages and permissions.read_message_history and permissions.add_reactions
+
+
+class HelpPaginator(View):
+    def __init__(self, ctx, mapping):
+        super().__init__()
+        self.limit = len(mapping)
+        self.ctx = ctx
+        self.mapping = mapping
+        self.index = 0
+        self.update()
+
+    def update(self):
+        self.left.disabled = self.start.disabled = self.index == 0
+        self.display_index.label = f"{self.index + 1}/{self.limit}"
+        self.right.disabled = self.end.disabled = self.index == self.limit - 1
+
+    def embed(self):
+        embed = discord.Embed(description=self.index + 1)
+        return embed
+
+    async def on_send(self):
+        await self.ctx.send(embed=self.embed(), view=self)
+
+    async def on_interaction(self, interaction: discord.Interaction):
+        self.update()
+        await interaction.response.edit_message(embed=self.embed(), view=self)
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        return interaction.user.id == self.ctx.author.id
+
+    #@button(style=discord.ButtonStyle.primary, emoji="\N{BLACK LEFT-POINTING DOUBLE TRIANGLE}")
+    async def start(self, interaction: discord.Interaction, _):
+        self.index = 0
+        await self.on_interaction(interaction)
+
+    @button(style=discord.ButtonStyle.primary, emoji="\N{BLACK LEFT-POINTING TRIANGLE}")
+    async def left(self, interaction: discord.Interaction, _):
+        self.index -= 1
+        await self.on_interaction(interaction)
+
+    @button(style=discord.ButtonStyle.secondary, disabled=True)
+    async def display_index(self, interaction: discord.Interaction, btn):
+        pass
+
+    @button(style=discord.ButtonStyle.primary, emoji="\N{BLACK RIGHT-POINTING TRIANGLE}")
+    async def right(self, interaction: discord.Interaction, _):
+        self.index += 1
+        await self.on_interaction(interaction)
+
+    #@button(style=discord.ButtonStyle.primary, emoji="\N{BLACK RIGHT-POINTING DOUBLE TRIANGLE}")
+    async def end(self, interaction: discord.Interaction, _):
+        self.index = self.limit - 1
+        await self.on_interaction(interaction)
+
+
+class Help(commands.HelpCommand):
+    async def send_bot_help(self, mapping):
+        await HelpPaginator(self.context, mapping).on_send()
 
 
 class Confirmation:
@@ -45,9 +104,7 @@ class Confirmation:
         self.answer = answer
 
     def __bool__(self):
-        if self.answer == None:
-            return False
-        return self.answer.content == "y"
+        return self.answer != None and self.answer.content in ("y", "yes")
 
     async def respond(self, *args, **kwargs):
         if self.answer:
@@ -63,9 +120,7 @@ class ApacheContext(commands.Context):
         def check(message: discord.Message):
             if message.author != self.author:
                 return False
-            content = message.content.lower()
-            return content == "y" or content == "n"
-
+            return message.content.lower() in ("y", "yes", "n", "no")
         try:
             answer = await self.bot.wait_for("message", check=check, timeout=timeout)
             if delete:
@@ -100,7 +155,7 @@ class Apachengine(commands.AutoShardedBot):
             allowed_mentions=allowed_mentions,
             command_prefix=commands.when_mentioned_or(config["bot"]["command_prefix"]),
             enable_debug_events=True,
-            #help_command=None,
+            help_command=Help(),
             intents=intents,
             status=config["bot"]["status"],
         )
@@ -108,23 +163,6 @@ class Apachengine(commands.AutoShardedBot):
 
     async def on_ready(self):
         self.ready_at = datetime.datetime.now()
-
-    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
-        if payload.guild_id == None:
-            return
-        guild = self.get_guild(payload.guild_id)
-        if guild == None:
-            return
-        if not guild.me.guild_permissions.manage_messages:
-            return
-        if not payload.member.guild_permissions.manage_messages:
-            return
-        channel = self.get_channel(payload.channel_id)
-        message = channel.get_partial_message(payload.message_id)
-        if payload.emoji == discord.PartialEmoji(name="\N{PUSHPIN}"):
-            await message.pin()
-        elif payload.emoji == discord.PartialEmoji(name="\N{CROSS MARK}"):
-            await message.delete()
 
     async def get_context(self, message, *, cls = ApacheContext):
         return await super().get_context(message, cls=cls)
