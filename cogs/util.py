@@ -41,36 +41,33 @@ class Utility(commands.Cog):
     @commands.guild_only()
     async def user(self, ctx: commands.Context, member: discord.Member):
         """Get user information"""
-        pass
 
     @commands.command(aliases=["guildinfo", "server", "serverinfo"])
     @commands.guild_only()
     async def guild(self, ctx: commands.Context):
         """Get guild information"""
-        pass
 
     @commands.command(aliases=["channelinfo"])
     @commands.guild_only()
     async def channel(self, ctx: commands.Context, channel: discord.abc.GuildChannel):
         """Get channel information"""
-        pass
 
     @commands.command(aliases=["roleinfo"])
     @commands.guild_only()
     async def role(self, ctx: commands.Context, role: discord.Role):
         """Get role information"""
-        pass
 
     @commands.command(aliases=["emojiinfo", "emote", "emoteinfo"])
     @commands.guild_only()
     async def emoji(self, ctx: commands.Context, emoji: discord.Emoji):
         """Get emoji information"""
-        pass
 
     @commands.command()
     @commands.guild_only()
     async def message(self, ctx: commands.Context, message: discord.Message):
         """Get message information"""
+
+    async def tag(self, ctx: commands.Context):
         pass
 
 

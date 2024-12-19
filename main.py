@@ -42,7 +42,6 @@ async def send_messages_check(ctx: commands.Context):
 class HelpPaginator(View):
     def __init__(self, ctx, mapping):
         super().__init__()
-        self.limit = len(mapping)
         self.ctx = ctx
         self.mapping = mapping
         self.index = 0
@@ -67,11 +66,6 @@ class HelpPaginator(View):
     async def interaction_check(self, interaction: discord.Interaction):
         return interaction.user.id == self.ctx.author.id
 
-    #@button(style=discord.ButtonStyle.primary, emoji="\N{BLACK LEFT-POINTING DOUBLE TRIANGLE}")
-    async def start(self, interaction: discord.Interaction, _):
-        self.index = 0
-        await self.on_interaction(interaction)
-
     @button(style=discord.ButtonStyle.primary, emoji="\N{BLACK LEFT-POINTING TRIANGLE}")
     async def left(self, interaction: discord.Interaction, _):
         self.index -= 1
@@ -84,11 +78,6 @@ class HelpPaginator(View):
     @button(style=discord.ButtonStyle.primary, emoji="\N{BLACK RIGHT-POINTING TRIANGLE}")
     async def right(self, interaction: discord.Interaction, _):
         self.index += 1
-        await self.on_interaction(interaction)
-
-    #@button(style=discord.ButtonStyle.primary, emoji="\N{BLACK RIGHT-POINTING DOUBLE TRIANGLE}")
-    async def end(self, interaction: discord.Interaction, _):
-        self.index = self.limit - 1
         await self.on_interaction(interaction)
 
 
