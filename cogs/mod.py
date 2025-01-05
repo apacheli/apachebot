@@ -12,24 +12,31 @@ from models.guild_config import GuildConfig
 
 
 ONE_WEEK = datetime.timedelta(days=7)
-ONE_DAY = datetime.timedelta(hours=24)
+ONE_MONTH = datetime.timedelta(days=30)
 
 
 def _format(string, keys):
-    return Template(string).substitute(keys)
+    return Template(string).safe_substitute(keys)
 
 
 def _on_member_join_embed(config, member: discord.Member):
+    guild = member.guild
     keys = {
         "user": member.global_name or member.name,
+        "mention": member.mention,
         "avatar": member.display_avatar.url,
-        "server": member.guild.name,
-        "members": member.guild.member_count,
+        "member_count": guild.member_count,
+        "server": guild.name,
+        "server_icon": guild.icon.url if guild.icon else "",
+        "rules_channel": guild.rules_channel.mention if guild.rules_channel else "",
     }
     embed = discord.Embed(
         description=_format(config.welcome_description, keys),
     )
-    embed.set_author(name=_format(config.welcome_title, keys), icon_url=member.display_avatar.url)
+    embed.set_author(
+        name=_format(config.welcome_title, keys),
+        icon_url=member.display_avatar.url,
+    )
     embed.set_image(url=_format(config.welcome_image, keys))
     embed.set_footer(text=_format(config.welcome_footer, keys))
     return embed
@@ -45,12 +52,10 @@ def _rank_member_suspicion(ctx: commands.Context, member, now):
         conditions += 1
     if re.search(r"\d{5,}$", member.name):
         conditions += 1
-    if now - member.created_at < ONE_WEEK:
+    if now - member.created_at < ONE_MONTH:
         conditions += 1
-    if now - member.joined_at < ONE_DAY:
+    if now - member.joined_at < ONE_WEEK:
         conditions += 1
-        if member.premium_since != None:
-            conditions += 1
     return conditions
 
 
@@ -74,7 +79,7 @@ class JoinLogConfigureModal(Modal):
         self.welcome_description = TextInput(
             label="Welcome Description",
             style=discord.TextStyle.long,
-            placeholder="Welcome to $server.",
+            placeholder="Welcome to $server. Please read the rules $rules.",
             required=False,
             max_length=1000,
             default=config.welcome_description,
@@ -88,7 +93,7 @@ class JoinLogConfigureModal(Modal):
         )
         self.welcome_footer = TextInput(
             label="Welcome Footer",
-            placeholder="$members members",
+            placeholder="$member_count members are in this server!",
             required=False,
             max_length=200,
             default=config.welcome_footer,
@@ -108,10 +113,10 @@ class JoinLogConfigureModal(Modal):
         _fake_config = await self.view.ctx.bot.update_guild_config(
             self.view.ctx.guild,
             join_log=channel.id,
-            welcome_title=self.welcome_title.value,
-            welcome_description=self.welcome_description.value,
-            welcome_image=self.welcome_image.value,
-            welcome_footer=self.welcome_footer.value,
+            welcome_title=self.welcome_title.value.strip(),
+            welcome_description=self.welcome_description.value.strip(),
+            welcome_image=self.welcome_image.value.strip(),
+            welcome_footer=self.welcome_footer.value.strip(),
         )
         await self.previous_interaction.edit_original_response(view=self.view)
         await interaction.response.send_message(
@@ -136,6 +141,10 @@ class JoinLogConfigure(View):
 
 
 class Moderation(commands.Cog):
+    emoji = "\N{SHIELD}"
+    description = "A category of commands used for moderating a server."
+    color = 0x008080
+
     def __init__(self, bot: commands.AutoShardedBot):
         super().__init__()
         self.bot = bot
@@ -184,7 +193,7 @@ class Moderation(commands.Cog):
         if n == 0:
             return await ctx.reply(":detective: No members detected.")
         s = "" if n == 1 else "s"
-        c = "Too many members to list." if n > 25 else "\n".join([f"{m.name} ({m.id})" for m in members])
+        c = "Too many members to list." if n > 50 else "\n".join([f"{m.name} ({m.id})" for m in members])
         confirm = await ctx.confirm(delete=True, content=f"```\n{c}\n```\n\n:question: Ban **{n}** member{s}? [y/n]")
         if not confirm:
             return await confirm.respond(":x: Operation aborted.")
@@ -203,8 +212,8 @@ class Moderation(commands.Cog):
         n = len(members)
         if n == 0:
             return await ctx.reply(":detective: No members detected.")
-        c = "Too many members to list." if n > 25 else "\n".join([f"{m.name} ({m.id})" for m in members])
-        await ctx.reply(f"```\n{c}\n```\n\n:detective: **{n}** member{"" if n == 1 else "s"} {"is" if n == 1 else "are"} suspicious.")
+        c = "Too many members to list." if n > 50 else "\n".join([f"{m.name} ({m.id})" for m in members])
+        await ctx.reply(f"```\n{c}\n```\n\n:detective: **{n}** member{" is" if n == 1 else "s are"} suspicious.")
 
     @commands.command()
     @commands.bot_has_permissions(ban_members=True)

@@ -33,27 +33,38 @@ activity_types = {
 
 
 async def send_messages_check(ctx: commands.Context):
+    return True
     if ctx.guild == None:
         return True
     permissions = ctx.channel.permissions_for(ctx.guild.me)
-    return permissions.send_messages and permissions.read_message_history and permissions.add_reactions
+    return permissions.send_messages and permissions.read_message_history or permissions.add_reactions
 
 
 class HelpPaginator(View):
     def __init__(self, ctx, mapping):
         super().__init__()
         self.ctx = ctx
-        self.mapping = mapping
+        self.limit = len(mapping)
+        self.keys = list(mapping)
         self.index = 0
+        self.mapping = mapping
         self.update()
 
     def update(self):
-        self.left.disabled = self.start.disabled = self.index == 0
+        self.left.disabled = self.index == 0
         self.display_index.label = f"{self.index + 1}/{self.limit}"
-        self.right.disabled = self.end.disabled = self.index == self.limit - 1
+        self.right.disabled = self.index == self.limit - 1
 
     def embed(self):
-        embed = discord.Embed(description=self.index + 1)
+        category = self.keys[self.index]
+        commands = self.mapping[category]
+        embed = discord.Embed()
+        embed.add_field(name="Commands", value=" ".join([f"`{command.name}`" for command in commands]))
+        if category:
+            embed.title = f"{category.emoji} {category.qualified_name}"
+            embed.description = category.description
+            embed.color = category.color
+        embed.set_footer(text=f"{len(commands)} commands")
         return embed
 
     async def on_send(self):
