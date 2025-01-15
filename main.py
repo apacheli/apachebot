@@ -4,6 +4,7 @@ import configparser
 from enum import Enum
 import datetime
 import discord
+from discord import ActivityType
 from discord.ext import commands
 from discord.ui import Button, button, View
 import os
@@ -23,56 +24,54 @@ cogs = (
 )
 
 activity_types = {
-    "playing": discord.ActivityType.playing,
-    "streaming": discord.ActivityType.streaming,
-    "listening": discord.ActivityType.listening,
-    "watching": discord.ActivityType.watching,
-    "custom": discord.ActivityType.custom,
-    "competing": discord.ActivityType.competing,
+    "playing": ActivityType.playing,
+    "streaming": ActivityType.streaming,
+    "listening": ActivityType.listening,
+    "watching": ActivityType.watching,
+    "custom": ActivityType.custom,
+    "competing": ActivityType.competing,
 }
 
 
 async def send_messages_check(ctx: commands.Context):
-    return True
     if ctx.guild == None:
         return True
-    permissions = ctx.channel.permissions_for(ctx.guild.me)
-    return permissions.send_messages and permissions.read_message_history or permissions.add_reactions
+    return ctx.channel.permissions_for(ctx.guild.me).send_messages
 
 
 class HelpPaginator(View):
     def __init__(self, ctx, mapping):
         super().__init__()
         self.ctx = ctx
-        self.limit = len(mapping)
-        self.keys = list(mapping)
+        self.embeds = []
+        for category in mapping:
+            commands = mapping[category]
+            embed = discord.Embed()
+            if category:
+                embed.title = f"{category.emoji} {category.qualified_name}"
+                embed.description = category.description
+                embed.color = category.color
+            embed.add_field(
+                name="Commands",
+                value=" ".join(f"`{command.name}`" for command in commands),
+            )
+            embed.set_footer(text=f"{len(commands)} commands")
+            self.embeds.append(embed)
         self.index = 0
-        self.mapping = mapping
-        self.update()
+        self.limit = len(mapping)
 
     def update(self):
         self.left.disabled = self.index == 0
         self.display_index.label = f"{self.index + 1}/{self.limit}"
         self.right.disabled = self.index == self.limit - 1
 
-    def embed(self):
-        category = self.keys[self.index]
-        commands = self.mapping[category]
-        embed = discord.Embed()
-        embed.add_field(name="Commands", value=" ".join([f"`{command.name}`" for command in commands]))
-        if category:
-            embed.title = f"{category.emoji} {category.qualified_name}"
-            embed.description = category.description
-            embed.color = category.color
-        embed.set_footer(text=f"{len(commands)} commands")
-        return embed
-
-    async def on_send(self):
-        await self.ctx.send(embed=self.embed(), view=self)
-
-    async def on_interaction(self, interaction: discord.Interaction):
+    async def start(self):
         self.update()
-        await interaction.response.edit_message(embed=self.embed(), view=self)
+        await self.ctx.send(embed=self.embeds[self.index], view=self)
+
+    async def update_interaction(self, interaction: discord.Interaction):
+        self.update()
+        await interaction.response.edit_message(embed=self.embeds[self.index], view=self)
 
     async def interaction_check(self, interaction: discord.Interaction):
         return interaction.user.id == self.ctx.author.id
@@ -80,7 +79,7 @@ class HelpPaginator(View):
     @button(style=discord.ButtonStyle.primary, emoji="\N{BLACK LEFT-POINTING TRIANGLE}")
     async def left(self, interaction: discord.Interaction, _):
         self.index -= 1
-        await self.on_interaction(interaction)
+        await self.update_interaction(interaction)
 
     @button(style=discord.ButtonStyle.secondary, disabled=True)
     async def display_index(self, interaction: discord.Interaction, btn):
@@ -89,12 +88,13 @@ class HelpPaginator(View):
     @button(style=discord.ButtonStyle.primary, emoji="\N{BLACK RIGHT-POINTING TRIANGLE}")
     async def right(self, interaction: discord.Interaction, _):
         self.index += 1
-        await self.on_interaction(interaction)
+        await self.update_interaction(interaction)
 
 
 class Help(commands.HelpCommand):
     async def send_bot_help(self, mapping):
-        await HelpPaginator(self.context, mapping).on_send()
+        paginator = HelpPaginator(self.context, mapping)
+        await paginator.start()
 
 
 class Confirmation:
@@ -104,7 +104,7 @@ class Confirmation:
         self.answer = answer
 
     def __bool__(self):
-        return self.answer != None and self.answer.content in ("y", "yes")
+        return self.answer != None and self.answer.content in ("y", "yes", "true", "1")
 
     async def respond(self, *args, **kwargs):
         if self.answer:
@@ -120,7 +120,7 @@ class ApacheContext(commands.Context):
         def check(message: discord.Message):
             if message.author != self.author:
                 return False
-            return message.content.lower() in ("y", "yes", "n", "no")
+            return message.content.lower() in ("y", "yes", "n", "no", "true", "false", "1", "0")
         try:
             answer = await self.bot.wait_for("message", check=check, timeout=timeout)
             if delete:
@@ -138,15 +138,15 @@ class Apachengine(commands.AutoShardedBot):
     def __init__(self, config, redis):
         self.config = config
         self.redis = redis
-        self.ready_at = None
+        self.ready_at = 0
         self.process = psutil.Process()
         activity_name = config["activity"]["name"]
         activity_type = activity_types[config["activity"]["type"]]
         activity = discord.Activity(
-            name="Custom Status" if discord.ActivityType == discord.ActivityType.custom else activity_name,
+            name="Custom Status" if ActivityType == ActivityType.custom else activity_name,
             type=activity_type,
-            url=config["activity"]["url"] if activity_type == discord.ActivityType.streaming else None,
-            state=activity_name if activity_type == discord.ActivityType.custom else None,
+            url=config["activity"]["url"] if activity_type == ActivityType.streaming else None,
+            state=activity_name if activity_type == ActivityType.custom else None,
         )
         allowed_mentions = discord.AllowedMentions.none()
         intents = discord.Intents.all()

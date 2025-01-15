@@ -79,7 +79,7 @@ class JoinLogConfigureModal(Modal):
         self.welcome_description = TextInput(
             label="Welcome Description",
             style=discord.TextStyle.long,
-            placeholder="Welcome to $server. Please read the rules $rules.",
+            placeholder="Welcome to $server. Please read the rules over at $rules_channel.",
             required=False,
             max_length=1000,
             default=config.welcome_description,
@@ -142,8 +142,8 @@ class JoinLogConfigure(View):
 
 class Moderation(commands.Cog):
     emoji = "\N{SHIELD}"
-    description = "A category of commands used for moderating a server."
-    color = 0x008080
+    description = "A category of commands used for moderating a server. Only moderators can use these commands."
+    color = 0x6737bf
 
     def __init__(self, bot: commands.AutoShardedBot):
         super().__init__()
@@ -193,7 +193,7 @@ class Moderation(commands.Cog):
         if n == 0:
             return await ctx.reply(":detective: No members detected.")
         s = "" if n == 1 else "s"
-        c = "Too many members to list." if n > 50 else "\n".join([f"{m.name} ({m.id})" for m in members])
+        c = "Too many members to list." if n > 50 else "\n".join(f"{m.name} ({m.id})" for m in members)
         confirm = await ctx.confirm(delete=True, content=f"```\n{c}\n```\n\n:question: Ban **{n}** member{s}? [y/n]")
         if not confirm:
             return await confirm.respond(":x: Operation aborted.")
@@ -212,7 +212,7 @@ class Moderation(commands.Cog):
         n = len(members)
         if n == 0:
             return await ctx.reply(":detective: No members detected.")
-        c = "Too many members to list." if n > 50 else "\n".join([f"{m.name} ({m.id})" for m in members])
+        c = "Too many members to list." if n > 50 else "\n".join(f"{m.name} ({m.id})" for m in members)
         await ctx.reply(f"```\n{c}\n```\n\n:detective: **{n}** member{" is" if n == 1 else "s are"} suspicious.")
 
     @commands.command()
@@ -424,12 +424,11 @@ class Moderation(commands.Cog):
     async def restrict(self, ctx: commands.Context, *, reason = None):
         """Restrict a channel to messages only"""
         overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
-        if overwrite.send_polls == False:
+        if overwrite.add_reactions == False:
             return
         overwrite.update(
             add_reactions=False,
             attach_files=False,
-            embed_links=False,
             send_polls=False,
         )
         await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite, reason=reason)
@@ -442,12 +441,11 @@ class Moderation(commands.Cog):
     async def unrestrict(self, ctx: commands.Context, *, reason = None):
         """Unrestrict the channel"""
         overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
-        if overwrite.send_polls != False:
+        if overwrite.add_reactions != False:
             return
         overwrite.update(
             add_reactions=None,
             attach_files=None,
-            embed_links=None,
             send_polls=None,
         )
         await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite, reason=reason)

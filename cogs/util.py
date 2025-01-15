@@ -1,16 +1,28 @@
 import aiohttp
 import datetime
 import discord
+from discord import ActivityType, ChannelType, Status
 from discord.ext import commands
 from discord.utils import snowflake_time
 import math
 import sys
+from tortoise import Tortoise
+
+
+channel_types = {
+    ChannelType.text: "Text Channels",
+    ChannelType.voice: "Voice Channels",
+    ChannelType.category: "Categories",
+    ChannelType.news: "Announcement Channels",
+    ChannelType.stage_voice: "Stages",
+    ChannelType.forum: "Forums",
+}
 
 
 class Utility(commands.Cog):
     emoji = ":gear:"
     description = "Utility commands."
-    color = 0x808080
+    color = 0x8f9496
 
     @commands.command(aliases=["date"])
     async def time(self, ctx: commands.Context):
@@ -31,16 +43,37 @@ class Utility(commands.Cog):
             description=ctx.bot.application.description,
             color=int(ctx.bot.config["bot"]["color"], 16),
         )
-        embed.add_field(name="Python", value=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}", inline=True)
-        embed.add_field(name="Version", value="1.0.0", inline=True)
-        embed.add_field(name="discord.py", value=discord.__version__, inline=True)
-        embed.add_field(name="Guilds", value=len(ctx.bot.guilds), inline=True)
-        embed.add_field(name="Users", value=len(ctx.bot.users), inline=True)
-        embed.add_field(name="Latency", value=f"{ctx.bot.latency * 1000:.2f} ms", inline=True)
-        embed.add_field(name="Uptime", value=f"{uptime.total_seconds() / 60:.2f} m", inline=True)
-        embed.add_field(name="CPU Usage", value=f"{ctx.bot.process.cpu_percent():.2f}%", inline=True)
-        embed.add_field(name="Memory Usage", value=f"{ctx.bot.process.memory_full_info().uss / 1024 ** 2:.2f} MiB", inline=True)
+        embed.add_field(name="Python", value=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
+        embed.add_field(name="Version", value="1.0.0")
+        embed.add_field(name="discord.py", value=discord.__version__)
+        embed.add_field(name="Guilds", value=len(ctx.bot.guilds))
+        embed.add_field(name="Users", value=len(ctx.bot.users))
+        embed.add_field(name="Latency", value=f"{ctx.bot.latency * 1000:.2f} ms")
+        embed.add_field(name="Uptime", value=f"{uptime.total_seconds() / 60:.2f} m")
+        embed.add_field(name="CPU Usage", value=f"{ctx.bot.process.cpu_percent():.2f}%")
+        embed.add_field(name="Memory Usage", value=f"{ctx.bot.process.memory_full_info().uss / 1024 ** 2:.2f} MiB")
         await ctx.reply(embed=embed)
+
+    @commands.command(aliases=["models", "redis"])
+    @commands.is_owner()
+    async def db(self, ctx: commands.Context):
+        memory = ctx.bot.redis.info("memory")
+        color = int(ctx.bot.config["bot"]["color"], 16)
+        redis_embed = discord.Embed(color=color)
+        redis_embed.set_author(name="Redis", icon_url="https://avatars.githubusercontent.com/u/1529926")
+        redis_embed.add_field(name="Used Memory", value=memory["used_memory_human"])
+        redis_embed.add_field(name="Total System Memory", value=memory["total_system_memory_human"])
+        redis_embed.add_field(name="Used Memory RSS", value=memory["used_memory_rss_human"])
+        redis_embed.set_footer(text=f"{ctx.bot.redis.dbsize()} dbsize")
+        models_embed = discord.Embed(color=color)
+        models_embed.set_author(name="Models", icon_url="https://www.postgresql.org/media/img/about/press/elephant.png")
+        total = 0
+        for model in Tortoise.apps["models"].values():
+            count = await model.all().count()
+            total += count
+            models_embed.add_field(name=model.__name__, value=count)
+        models_embed.set_footer(text=f"{total} object{"" if total == 1 else "s"}")
+        await ctx.reply(embeds=[redis_embed, models_embed])
 
     @commands.command(aliases=["userinfo", "who", "whois", "member", "memberinfo"])
     @commands.guild_only()
@@ -50,24 +83,24 @@ class Utility(commands.Cog):
             member = ctx.author
         description = ""
         for activity in member.activities:
-            if activity.type == discord.ActivityType.playing:
+            if activity.type == ActivityType.playing:
                 description += f"- Playing **{activity.name}**\n"
-            elif activity.type == discord.ActivityType.streaming:
+            elif activity.type == ActivityType.streaming:
                 description += f"- Streaming [**{activity.name}**]({activity.url})\n"
-            elif activity.type == discord.ActivityType.listening:
+            elif activity.type == ActivityType.listening:
                 description += f"- Listening to [**{activity.title}**]({activity.track_url})\n"
-            elif activity.type == discord.ActivityType.watching:
+            elif activity.type == ActivityType.watching:
                 description += f"- Watching **{activity.name}**\n"
-            elif activity.type == discord.ActivityType.custom:
+            elif activity.type == ActivityType.custom:
                 emoji = f"{activity.emoji} " if activity.emoji else ""
                 description += f"- {emoji}{activity.name}\n"
-            elif activity.type == discord.ActivityType.competing:
+            elif activity.type == ActivityType.competing:
                 description += f"- Competing in **{activity.name}**\n"
         _statuses = {
-            discord.Status.online: "Online",
-            discord.Status.idle: "Idle",
-            discord.Status.dnd: "Do Not Disturb",
-            discord.Status.offline: "Offline",
+            Status.online: "Online",
+            Status.idle: "Idle",
+            Status.dnd: "Do Not Disturb",
+            Status.offline: "Offline",
         }
         alt_name = member.nick or member.global_name
         tag_name = f"{member.name}{f"#{member.discriminator}" if member.discriminator != "0" else ""}"
@@ -77,17 +110,17 @@ class Utility(commands.Cog):
             color=member.color,
         )
         embed.set_thumbnail(url=member.display_avatar.url)
-        embed.add_field(name="Status", value=_statuses[member.status], inline=True)
-        embed.add_field(name="Joined", value=f"<t:{math.floor(member.joined_at.timestamp())}>", inline=True)
-        embed.add_field(name="Created", value=f"<t:{math.floor(member.created_at.timestamp())}>", inline=True)
+        embed.add_field(name="Status", value=_statuses[member.status])
+        embed.add_field(name="Joined", value=f"<t:{math.floor(member.joined_at.timestamp())}>")
+        embed.add_field(name="Created", value=f"<t:{math.floor(member.created_at.timestamp())}>")
         if len(member.roles) > 1:
             sorted_roles = sorted(member.roles[1:], key=lambda r: r.position, reverse=True)
             embed.add_field(
                 name="Roles",
-                value=" ".join([role.mention for role in sorted_roles]),
+                value=" ".join(role.mention for role in sorted_roles),
             )
         embed.set_footer(text=member.id)
-        await ctx.send(embed=embed)
+        await ctx.reply(embed=embed)
 
     @commands.command(aliases=["guildinfo", "server", "serverinfo"])
     @commands.guild_only()
@@ -96,28 +129,84 @@ class Utility(commands.Cog):
         embed = discord.Embed(
             title=ctx.guild.name,
             description=ctx.guild.description,
+            color=ctx.guild.owner.color,
         )
         if ctx.guild.icon:
             embed.set_thumbnail(url=ctx.guild.icon.url)
-        embed.add_field(name="Created", value=f"<t:{math.floor(ctx.guild.created_at.timestamp())}>", inline=True)
-        embed.add_field(name="Channels", value=len(ctx.guild.channels), inline=True)
-        embed.add_field(name="Emojis", value=len(ctx.guild.emojis), inline=True)
-        embed.add_field(name="Members", value=len(ctx.guild.members), inline=True)
-        embed.add_field(name="Roles", value=len(ctx.guild.roles), inline=True)
+        embed.add_field(name="Created", value=f"<t:{math.floor(ctx.guild.created_at.timestamp())}>")
+        embed.add_field(name="Channels", value=len(ctx.guild.channels))
+        embed.add_field(name="Members", value=len(ctx.guild.members))
+        embed.add_field(name="Emojis", value=len(ctx.guild.emojis))
+        embed.add_field(name="Stickers", value=len(ctx.guild.stickers))
+        embed.add_field(name="Roles", value=len(ctx.guild.roles))
         embed.set_footer(text=ctx.guild.id)
-        await ctx.send(embed=embed)
+        await ctx.reply(embed=embed)
 
-    @commands.command(aliases=["channelinfo"])
+    @commands.command(aliases=["channelinfo", "channels"])
     @commands.guild_only()
-    async def channel(self, ctx: commands.Context, channel: discord.abc.GuildChannel):
+    async def channel(self, ctx: commands.Context, channel: discord.abc.GuildChannel = None):
         """Get channel information"""
+        embed = discord.Embed(color=ctx.guild.owner.color)
+        if channel == None:
+            embed.set_author(
+                name=ctx.guild.name,
+                icon_url=ctx.guild.icon if ctx.guild.icon.url else None,
+            )
+            channels_map = {c: [] for c in channel_types}
+            for c in ctx.guild.channels:
+                channels_map[c.type].append(c)
+            for channel_type in channels_map:
+                channels = channels_map[channel_type]
+                if len(channels) > 0:
+                    embed.add_field(
+                        name=channel_types[channel_type],
+                        value=" ".join(f"`{c.name}`" for c in channels),
+                        inline=False,
+                    )
+                embed.set_footer(text=f"{len(ctx.guild.channels)} channels")
+            return await ctx.reply(embed=embed)
+        embed.set_author(
+            name=channel.name,
+            icon_url=ctx.guild.icon if ctx.guild.icon.url else None,
+        )
+        embed.description = getattr(channel, "topic", None)
+        embed.add_field(name="Type", value=channel.type)
+        embed.add_field(name="Created", value=f"<t:{math.floor(channel.created_at.timestamp())}>")
+        embed.add_field(name="NSFW", value=channel.nsfw)
+        embed.set_footer(text=channel.id)
+        await ctx.reply(embed=embed)
 
-    @commands.command(aliases=["roleinfo"])
+    @commands.command(aliases=["roleinfo", "roles"])
     @commands.guild_only()
-    async def role(self, ctx: commands.Context, role: discord.Role):
+    async def role(self, ctx: commands.Context, role: discord.Role = None):
         """Get role information"""
+        embed = discord.Embed()
+        if role == None:
+            embed.color = ctx.guild.owner.color
+            embed.set_author(
+                name=ctx.guild.name,
+                icon_url=ctx.guild.icon if ctx.guild.icon.url else None,
+            )
+            embed.description = " ".join(f"`{r.name}`" for r in ctx.guild.roles)
+            embed.set_footer(text=f"{len(ctx.guild.roles)} roles")
+            return await ctx.reply(embed=embed)
+        embed.set_author(
+            name=role.name,
+            icon_url=ctx.guild.icon if ctx.guild.icon.url else None,
+        )
+        embed.color = role.color
+        embed.add_field(name="Color", value=f"#{role.color.value:0x}".upper())
+        embed.add_field(name="Created", value=f"<t:{math.floor(role.created_at.timestamp())}>")
+        embed.add_field(name="Members", value=len(role.members))
+        embed.add_field(name="Hoist", value=role.hoist)
+        embed.add_field(name="Integration", value=role.managed)
+        embed.add_field(name="Mentionable", value=role.mentionable)
+        embed.set_footer(text=role.id)
+        if role.display_icon != None:
+            embed.set_thumbnail(url=role.display_icon.url)
+        await ctx.reply(embed=embed)
 
-    @commands.command(name="emoji", aliases=["emojiinfo", "emote", "emoteinfo"])
+    @commands.command(name="emoji", aliases=["emojiinfo", "emote", "emoteinfo", "emojis", "emotes"])
     @commands.guild_only()
     async def _emoji(self, ctx: commands.Context, emoji: discord.Emoji):
         """Get emoji information"""
@@ -128,7 +217,27 @@ class Utility(commands.Cog):
         """Get message information"""
 
     @commands.command()
-    async def tag(self, ctx: commands.Context):
+    @commands.guild_only()
+    async def boosters(self, ctx: commands.Context):
+        pass
+
+    @commands.command(aliases=["listening", "music", "song", "track"])
+    @commands.guild_only()
+    async def spotify(self, ctx: commands.Context, member: discord.Member):
+        pass
+
+    @commands.command(aliases=["pfp"])
+    @commands.guild_only()
+    async def avatar(self, ctx: commands.Context, member: discord.Member):
+        pass
+
+    @commands.command()
+    @commands.guild_only()
+    async def icon(self, ctx: commands.Context):
+        pass
+
+    @commands.command(name="color")
+    async def _color(self, ctx: commands.Context):
         pass
 
 

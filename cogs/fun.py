@@ -5,7 +5,7 @@ from discord.ext import commands
 class Entertainment(commands.Cog):
     emoji = "\N{VIDEO GAME}"
     description = "Entertainment commands."
-    color = 0x808000
+    color = 0x5cc433
 
 
 async def setup(bot):
