@@ -4,7 +4,7 @@ import configparser
 from enum import Enum
 import datetime
 import discord
-from discord import ActivityType
+from discord import ActivityType, ChannelType
 from discord.ext import commands
 from discord.ui import Button, button, View
 import os
@@ -31,12 +31,6 @@ activity_types = {
     "custom": ActivityType.custom,
     "competing": ActivityType.competing,
 }
-
-
-async def send_messages_check(ctx: commands.Context):
-    if ctx.guild == None:
-        return True
-    return ctx.channel.permissions_for(ctx.guild.me).send_messages
 
 
 class HelpPaginator(View):
@@ -159,7 +153,6 @@ class Apachengine(commands.AutoShardedBot):
             intents=intents,
             status=config["bot"]["status"],
         )
-        self.add_check(send_messages_check)
 
     async def on_ready(self):
         self.ready_at = datetime.datetime.now()
