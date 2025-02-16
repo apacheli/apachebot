@@ -4,6 +4,7 @@ import discord
 from discord import ActivityType, ChannelType, Status
 from discord.ext import commands
 from discord.utils import snowflake_time
+import colorsys
 import math
 import sys
 from tortoise import Tortoise
@@ -57,6 +58,7 @@ class Utility(commands.Cog):
     @commands.command(aliases=["models", "redis"])
     @commands.is_owner()
     async def db(self, ctx: commands.Context):
+        """Get database information"""
         memory = ctx.bot.redis.info("memory")
         color = int(ctx.bot.config["bot"]["color"], 16)
         redis_embed = discord.Embed(color=color)
@@ -219,7 +221,7 @@ class Utility(commands.Cog):
     @commands.command()
     @commands.guild_only()
     async def boosters(self, ctx: commands.Context):
-        pass
+        """List all server boosters"""
 
     @commands.command(aliases=["listening", "music", "song", "track"])
     @commands.guild_only()
@@ -228,16 +230,18 @@ class Utility(commands.Cog):
 
     @commands.command(aliases=["pfp"])
     @commands.guild_only()
-    async def avatar(self, ctx: commands.Context, member: discord.Member):
-        pass
+    async def avatar(self, ctx: commands.Context, member: discord.Member = None):
+        """Get a user's avatar"""
+        await ctx.reply(ember.display_avatar.url if member else ctx.author.display_avatar.url)
 
     @commands.command()
     @commands.guild_only()
     async def icon(self, ctx: commands.Context):
-        pass
+        """Get the guild's icon"""
+        await ctx.reply(ctx.guild.icon.url if ctx.guild.icon else f":x: No icon found.")
 
     @commands.command(name="color")
-    async def _color(self, ctx: commands.Context):
+    async def _color(self, ctx: commands.Context, color):
         pass
 
 

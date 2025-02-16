@@ -28,6 +28,7 @@ def _on_member_join_embed(config, member: discord.Member):
         "member_count": guild.member_count,
         "server": guild.name,
         "server_icon": guild.icon.url if guild.icon else "",
+        "system_channel": guild.system_channel.mention if guild.system_channel else "",
         "rules_channel": guild.rules_channel.mention if guild.rules_channel else "",
     }
     embed = discord.Embed(
