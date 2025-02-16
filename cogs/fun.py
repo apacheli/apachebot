@@ -49,5 +49,5 @@ class Entertainment(commands.Cog):
                 await message.edit(content=":x: Took too long to respond. Please try again!")
 
 
-async def setup(bot):t
+async def setup(bot):
     await bot.add_cog(Entertainment(bot))
