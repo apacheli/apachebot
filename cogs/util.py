@@ -5,8 +5,9 @@ from discord import ActivityType, ChannelType, Status
 from discord.ext import commands
 from discord.utils import snowflake_time
 import colorsys
-import math
+from math import floor
 import sys
+from random import randint
 from tortoise import Tortoise
 
 
@@ -19,6 +20,44 @@ channel_types = {
     ChannelType.forum: "Forums",
 }
 
+colors = {
+    "Black": [0, 0, 0],
+    "White": [1, 1, 1],
+    "Red": [1, 0, 0],
+    "Yellow": [1, 1, 0],
+    "Green": [0, 1, 0],
+    "Cyan": [0, 1, 1],
+    "Blue": [0, 0, 1],
+    "Magenta": [1, 0, 1],
+    "Orange": [1, 0.5, 0],
+    "Chartreuse": [0.5, 1, 0],
+    "Spring Green": [0, 1, 0.5],
+    "Azure": [0, 0.5, 1],
+    "Violet": [0.5, 0, 1],
+    "Rose": [1, 0, 0.5],
+}
+
+
+def closest_color(r, g, b):
+    c = None
+    s = float("inf")
+    for color, (cr, cg, cb) in colors.items():
+        distance = (r - cr) ** 2 + (g - cg) ** 2 + (b - cb) ** 2
+        if distance < s:
+            s = distance
+            c = color
+    return c
+
+
+def rgb_to_cmyk(r, g, b):
+    k = max(r, g, b)
+    if k == 0:
+        return (0, 0, 0, 1)
+    c = (1 - r / k)
+    m = (1 - g / k)
+    y = (1 - b / k)
+    return (c, m, y, 1 - k)
+
 
 class Utility(commands.Cog):
     emoji = ":gear:"
@@ -28,7 +67,7 @@ class Utility(commands.Cog):
     @commands.command(aliases=["date"])
     async def time(self, ctx: commands.Context):
         """Show the time"""
-        await ctx.reply(f"<t:{math.floor(datetime.datetime.now().timestamp())}>")
+        await ctx.reply(f"<t:{floor(datetime.datetime.now().timestamp())}>")
 
     @commands.command()
     async def ping(self, ctx: commands.Context):
@@ -113,8 +152,8 @@ class Utility(commands.Cog):
         )
         embed.set_thumbnail(url=member.display_avatar.url)
         embed.add_field(name="Status", value=_statuses[member.status])
-        embed.add_field(name="Joined", value=f"<t:{math.floor(member.joined_at.timestamp())}>")
-        embed.add_field(name="Created", value=f"<t:{math.floor(member.created_at.timestamp())}>")
+        embed.add_field(name="Joined", value=f"<t:{floor(member.joined_at.timestamp())}>")
+        embed.add_field(name="Created", value=f"<t:{floor(member.created_at.timestamp())}>")
         if len(member.roles) > 1:
             sorted_roles = sorted(member.roles[1:], key=lambda r: r.position, reverse=True)
             embed.add_field(
@@ -135,7 +174,7 @@ class Utility(commands.Cog):
         )
         if ctx.guild.icon:
             embed.set_thumbnail(url=ctx.guild.icon.url)
-        embed.add_field(name="Created", value=f"<t:{math.floor(ctx.guild.created_at.timestamp())}>")
+        embed.add_field(name="Created", value=f"<t:{floor(ctx.guild.created_at.timestamp())}>")
         embed.add_field(name="Channels", value=len(ctx.guild.channels))
         embed.add_field(name="Members", value=len(ctx.guild.members))
         embed.add_field(name="Emojis", value=len(ctx.guild.emojis))
@@ -173,7 +212,7 @@ class Utility(commands.Cog):
         )
         embed.description = getattr(channel, "topic", None)
         embed.add_field(name="Type", value=channel.type)
-        embed.add_field(name="Created", value=f"<t:{math.floor(channel.created_at.timestamp())}>")
+        embed.add_field(name="Created", value=f"<t:{floor(channel.created_at.timestamp())}>")
         embed.add_field(name="NSFW", value=channel.nsfw)
         embed.set_footer(text=channel.id)
         await ctx.reply(embed=embed)
@@ -197,8 +236,8 @@ class Utility(commands.Cog):
             icon_url=ctx.guild.icon if ctx.guild.icon.url else None,
         )
         embed.color = role.color
-        embed.add_field(name="Color", value=f"#{role.color.value:0x}".upper())
-        embed.add_field(name="Created", value=f"<t:{math.floor(role.created_at.timestamp())}>")
+        embed.add_field(name="Color", value=f"#{role.color.value:06x}".upper())
+        embed.add_field(name="Created", value=f"<t:{floor(role.created_at.timestamp())}>")
         embed.add_field(name="Members", value=len(role.members))
         embed.add_field(name="Hoist", value=role.hoist)
         embed.add_field(name="Integration", value=role.managed)
@@ -210,23 +249,67 @@ class Utility(commands.Cog):
 
     @commands.command(name="emoji", aliases=["emojiinfo", "emote", "emoteinfo", "emojis", "emotes"])
     @commands.guild_only()
-    async def _emoji(self, ctx: commands.Context, emoji: discord.Emoji):
+    async def _emoji(self, ctx: commands.Context, emoji: discord.Emoji = None):
         """Get emoji information"""
-
-    @commands.command()
-    @commands.guild_only()
-    async def message(self, ctx: commands.Context, message: discord.Message):
-        """Get message information"""
+        embed = discord.Embed(color=ctx.guild.owner.color)
+        if emoji == None:
+            embed.set_author(
+                name=ctx.guild.name,
+                icon_url=ctx.guild.icon if ctx.guild.icon.url else None,
+            )
+            embed.description = " ".join(f"{e}" for e in ctx.guild.emojis)
+            embed.set_footer(text=f"{len(ctx.guild.emojis)} emojis")
+            return await ctx.reply(embed=embed)
+        embed.set_author(name=emoji.name)
+        embed.set_thumbnail(url=emoji.url)
+        embed.add_field(name="Created", value=f"<t:{floor(emoji.created_at.timestamp())}>")
+        embed.add_field(name="Integration", value=emoji.managed)
+        embed.add_field(name="Available", value=emoji.available)
+        embed.set_footer(text=emoji.id)
+        await ctx.reply(embed=embed)
 
     @commands.command()
     @commands.guild_only()
     async def boosters(self, ctx: commands.Context):
         """List all server boosters"""
+        if not ctx.guild.premium_subscriber_role:
+            return await ctx.reply(":x: No booster role.")
+        embed = discord.Embed(
+            color=ctx.guild.premium_subscriber_role.color,
+        )
+        count = 0
+        description = ""
+        for member in ctx.guild.premium_subscribers:
+            count += 1
+            description += f"{member.mention} <t:{floor(member.premium_since.timestamp())}:R>\n"
+        embed.description = description
+        embed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
+        embed.set_footer(name=f"{count} boosters")
 
     @commands.command(aliases=["listening", "music", "song", "track"])
     @commands.guild_only()
-    async def spotify(self, ctx: commands.Context, member: discord.Member):
-        pass
+    async def spotify(self, ctx: commands.Context, member: discord.Member = None):
+        """See what someone is listening to on Spotify"""
+        if member == None:
+            member = ctx.author
+        embeds = []
+        for activity in member.activities:
+            if activity.type != ActivityType.listening:
+                continue
+            embed = discord.Embed(
+                title=activity.title,
+                color=activity.color,
+                url=activity.track_url,
+            )
+            embed.set_thumbnail(url=activity.album_cover_url)
+            embed.add_field(name="Album", value=activity.album, inline=False)
+            embed.add_field(name="Artists", value="\n".join(activity.artists), inline=False)
+            embed.set_footer(text=member.display_name, icon_url=member.display_avatar.url)
+            embeds.append(embed)
+        if len(embeds) > 0:
+            await ctx.reply(embeds=embeds)
+        else:
+            await ctx.reply(":x: No track detected.")
 
     @commands.command(aliases=["pfp"])
     @commands.guild_only()
@@ -241,8 +324,27 @@ class Utility(commands.Cog):
         await ctx.reply(ctx.guild.icon.url if ctx.guild.icon else f":x: No icon found.")
 
     @commands.command(name="color")
-    async def _color(self, ctx: commands.Context, color):
-        pass
+    async def _color(self, ctx: commands.Context, color = None):
+        if color == None:
+            color = randint(0, 0xffffff)
+        elif (color := int(color, 16)) > 0xffffff:
+            return await ctx.reply(":x: Invalid hexadecimal value.")
+        r = ((color >> 16) & 0xff) / 255
+        g = ((color >> 8) & 0xff) / 255
+        b = (color & 0xff) / 255
+        hls = colorsys.rgb_to_hls(r, g, b)
+        hsv = colorsys.rgb_to_hsv(r, g, b)
+        yiq = colorsys.rgb_to_yiq(r, g, b)
+        cmyk = rgb_to_cmyk(r, g, b)
+        embed = discord.Embed(title=closest_color(r, g, b), color=color)
+        embed.add_field(name="Decimal", value=color)
+        embed.add_field(name="Hexadecimal", value=f"#{color:06X}")
+        embed.add_field(name="RGB", value=f"{floor(r * 255)}, {floor(g * 255)}, {floor(b * 255)}")
+        embed.add_field(name="CMYK", value=f"{floor(cmyk[0] * 100)}%, {floor(cmyk[1] * 100)}%, {floor(cmyk[2] * 100)}%, {floor(cmyk[3] * 100)}%")
+        embed.add_field(name="HLS", value=f"{floor(hls[0] * 360)}\u00B0, {floor(hls[1] * 100)}%, {floor(hls[2] * 100)}%")
+        embed.add_field(name="HSV", value=f"{floor(hsv[0] * 360)}\u00B0, {floor(hsv[1] * 100)}%, {floor(hsv[2] * 100)}%")
+        embed.set_thumbnail(url=f"https://singlecolorimage.com/get/{color:06X}/64x64")
+        await ctx.reply(embed=embed)
 
 
 async def setup(bot):

@@ -33,6 +33,15 @@ activity_types = {
 }
 
 
+async def send_messages_check(ctx: commands.Context):
+    if ctx.guild == None:
+        return True
+    permissions = ctx.channel.permissions_for(ctx.guild.me)
+    if ctx.channel.type in (ChannelType.news_thread, ChannelType.public_thread, ChannelType.private_thread):
+        return permissions.send_messages_in_threads
+    return permissions.send_messages
+
+
 class HelpPaginator(View):
     def __init__(self, ctx, mapping):
         super().__init__()
