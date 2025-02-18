@@ -274,9 +274,7 @@ class Utility(commands.Cog):
         """List all server boosters"""
         if not ctx.guild.premium_subscriber_role:
             return await ctx.reply(":x: No booster role.")
-        embed = discord.Embed(
-            color=ctx.guild.premium_subscriber_role.color,
-        )
+        embed = discord.Embed(color=ctx.guild.premium_subscriber_role.color)
         count = 0
         description = ""
         for member in ctx.guild.premium_subscribers:
@@ -284,7 +282,8 @@ class Utility(commands.Cog):
             description += f"{member.mention} <t:{floor(member.premium_since.timestamp())}:R>\n"
         embed.description = description
         embed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
-        embed.set_footer(name=f"{count} boosters")
+        embed.set_footer(text==f"{count} boosters")
+        await ctx.reply(embed=embed)
 
     @commands.command(aliases=["listening", "music", "song", "track"])
     @commands.guild_only()
