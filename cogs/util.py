@@ -279,7 +279,7 @@ class Utility(commands.Cog):
         description = ""
         for member in ctx.guild.premium_subscribers:
             count += 1
-            description += f"{member.mention} <t:{floor(member.premium_since.timestamp())}:R>\n"
+            description += f"{count}. {member.mention} <t:{floor(member.premium_since.timestamp())}:R>\n"
         embed.description = description
         embed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
         embed.set_footer(text=f"{count} boosters")
