@@ -20,21 +20,28 @@ channel_types = {
     ChannelType.forum: "Forums",
 }
 
+statuses = {
+    Status.online: "Online",
+    Status.idle: "Idle",
+    Status.dnd: "Do Not Disturb",
+    Status.offline: "Offline",
+}
+
 colors = {
-    "Black": [0, 0, 0],
-    "White": [1, 1, 1],
-    "Red": [1, 0, 0],
-    "Yellow": [1, 1, 0],
-    "Green": [0, 1, 0],
-    "Cyan": [0, 1, 1],
-    "Blue": [0, 0, 1],
-    "Magenta": [1, 0, 1],
-    "Orange": [1, 0.5, 0],
-    "Chartreuse": [0.5, 1, 0],
-    "Spring Green": [0, 1, 0.5],
-    "Azure": [0, 0.5, 1],
-    "Violet": [0.5, 0, 1],
-    "Rose": [1, 0, 0.5],
+    "Black": (0, 0, 0),
+    "White": (1, 1, 1),
+    "Red": (1, 0, 0),
+    "Yellow": (1, 1, 0),
+    "Green": (0, 1, 0),
+    "Cyan": (0, 1, 1),
+    "Blue": (0, 0, 1),
+    "Magenta": (1, 0, 1),
+    "Orange": (1, 0.5, 0),
+    "Chartreuse": (0.5, 1, 0),
+    "Spring Green": (0, 1, 0.5),
+    "Azure": (0, 0.5, 1),
+    "Violet": (0.5, 0, 1),
+    "Rose": (1, 0, 0.5),
 }
 
 
@@ -60,9 +67,29 @@ def rgb_to_cmyk(r, g, b):
 
 
 class Utility(commands.Cog):
-    emoji = ":gear:"
-    description = "Utility commands."
-    color = 0x8f9496
+    """Helpful commands for whatever purpose."""
+    help_emoji = ":gear:" # \N{GEAR} doesn't work for some reason
+    help_color = 0x8f9496
+
+    @commands.command()
+    async def upper(self, ctx: commands.Context, *, text: str):
+        """Convert text to uppercase"""
+        await ctx.reply(text.upper())
+
+    @commands.command()
+    async def lower(self, ctx: commands.Context, *, text: str):
+        """Convert text to lowercase"""
+        await ctx.reply(text.lower())
+
+    @commands.command()
+    async def reverse(self, ctx: commands.Context, *, text: str):
+        """Reverse text"""
+        await ctx.reply(text[::-1])
+
+    @commands.command()
+    async def escape(self, ctx: commands.Command, message: discord.Message):
+        """Escape markdown text from a message"""
+        await ctx.reply(discord.utils.escape_markdown(message.content))
 
     @commands.command(aliases=["date"])
     async def time(self, ctx: commands.Context):
@@ -137,12 +164,6 @@ class Utility(commands.Cog):
                 description += f"- {emoji}{activity.name}\n"
             elif activity.type == ActivityType.competing:
                 description += f"- Competing in **{activity.name}**\n"
-        _statuses = {
-            Status.online: "Online",
-            Status.idle: "Idle",
-            Status.dnd: "Do Not Disturb",
-            Status.offline: "Offline",
-        }
         alt_name = member.nick or member.global_name
         tag_name = f"{member.name}{f"#{member.discriminator}" if member.discriminator != "0" else ""}"
         embed = discord.Embed(
@@ -151,7 +172,7 @@ class Utility(commands.Cog):
             color=member.color,
         )
         embed.set_thumbnail(url=member.display_avatar.url)
-        embed.add_field(name="Status", value=_statuses[member.status])
+        embed.add_field(name="Status", value=statuses[member.status])
         embed.add_field(name="Joined", value=f"<t:{floor(member.joined_at.timestamp())}>")
         embed.add_field(name="Created", value=f"<t:{floor(member.created_at.timestamp())}>")
         if len(member.roles) > 1:
@@ -324,6 +345,7 @@ class Utility(commands.Cog):
 
     @commands.command(name="color")
     async def _color(self, ctx: commands.Context, color = None):
+        """Return color information"""
         if color == None:
             color = randint(0, 0xffffff)
         elif (color := int(color, 16)) > 0xffffff:

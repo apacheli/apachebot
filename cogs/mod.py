@@ -130,11 +130,14 @@ class JoinLogConfigure(View):
     def __init__(self, ctx: commands.Context):
         super().__init__()
         self.ctx = ctx
+        self.modal = None
 
     @button(style=discord.ButtonStyle.secondary, label="Configure", emoji="\N{GEAR}")
     async def configure(self, interaction: discord.Interaction, btn: Button):
-        config = await self.ctx.bot.get_guild_config(self.ctx.guild)
-        await interaction.response.send_modal(JoinLogConfigureModal(self, interaction, config))
+        if self.modal == None:
+            config = await self.ctx.bot.get_guild_config(self.ctx.guild)
+            self.modal = JoinLogConfigureModal(self, interaction, config)
+        await interaction.response.send_modal(self.modal)
         btn.disabled = True
 
     async def interaction_check(self, interaction: discord.Interaction):
@@ -142,9 +145,9 @@ class JoinLogConfigure(View):
 
 
 class Moderation(commands.Cog):
-    emoji = "\N{SHIELD}"
-    description = "A category of commands used for moderating a server. Only moderators can use these commands."
-    color = 0x6737bf
+    """Commands for server moderation. Only moderators can access these commands."""
+    help_emoji = "\N{SHIELD}"
+    help_color = 0x334bd4
 
     def __init__(self, bot: commands.AutoShardedBot):
         super().__init__()

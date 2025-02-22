@@ -43,7 +43,7 @@ async def send_messages_check(ctx: commands.Context):
 
 
 class HelpPaginator(View):
-    def __init__(self, ctx, mapping):
+    def __init__(self, ctx, mapping, index = 0):
         super().__init__()
         self.ctx = ctx
         self.embeds = []
@@ -51,16 +51,16 @@ class HelpPaginator(View):
             commands = mapping[category]
             embed = discord.Embed()
             if category:
-                embed.title = f"{category.emoji} {category.qualified_name}"
+                embed.title = f"{category.help_emoji} {category.qualified_name}"
                 embed.description = category.description
-                embed.color = category.color
+                embed.color = category.help_color
             embed.add_field(
                 name="Commands",
                 value=" ".join(f"`{command.name}`" for command in commands),
             )
             embed.set_footer(text=f"{len(commands)} commands")
             self.embeds.append(embed)
-        self.index = 0
+        self.index = index
         self.limit = len(mapping)
 
     def update(self):
@@ -96,8 +96,38 @@ class HelpPaginator(View):
 
 class Help(commands.HelpCommand):
     async def send_bot_help(self, mapping):
+        del mapping[None]
         paginator = HelpPaginator(self.context, mapping)
         await paginator.start()
+
+    async def send_cog_help(self, cog: commands.Cog):
+        mapping = self.get_bot_mapping()
+        del mapping[None]
+        index = 0
+        for c, _ in mapping.items():
+            if cog == c:
+                break
+            index += 1
+        paginator = HelpPaginator(self.context, mapping, index)
+        await paginator.start()
+
+    async def send_command_help(self, command: commands.Command):
+        embed = discord.Embed(
+            title=command.qualified_name,
+            description=f"{command.short_doc}\n```\n{self.get_command_signature(command)}\n```",
+            color=command.cog.help_color,
+        )
+        embed.set_footer(text=f"{command.cog.help_emoji} {command.cog.qualified_name}")
+        await self.context.reply(embed=embed)
+
+    async def send_group_help(self, group: commands.Group):
+        embed = discord.Embed(
+            title=group.qualified_name,
+            description=f"{group.short_doc}\n```\n{"\n".join(self.get_command_signature(c) for c in group.commands)}\n```",
+            color=group.cog.help_color,
+        )
+        embed.set_footer(text=f"{group.cog.help_emoji} {group.cog.qualified_name}")
+        await self.context.reply(embed=embed)
 
 
 class Confirmation:
@@ -158,7 +188,7 @@ class Apachengine(commands.AutoShardedBot):
             allowed_mentions=allowed_mentions,
             command_prefix=commands.when_mentioned_or(config["bot"]["command_prefix"]),
             enable_debug_events=True,
-            help_command=Help(),
+            #help_command=Help(),
             intents=intents,
             status=config["bot"]["status"],
         )
@@ -179,6 +209,10 @@ class Apachengine(commands.AutoShardedBot):
         for cog in cogs:
             await self.load_extension(f"cogs.{cog}")
         async with self:
+            # HACK: Assign the help command here so we can give it a cog
+            help_command = Help()
+            help_command.cog = self.get_cog("Utility")
+            self.help_command = help_command
             await super().start(self.config["bot"]["bot_token"] or os.getenv("BOT_TOKEN"))
 
     def parse_time(self, time, delta=True):
