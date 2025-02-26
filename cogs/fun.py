@@ -334,7 +334,7 @@ class Entertainment(commands.Cog):
     @bloons.command()
     async def boss(self, ctx: commands.Context):
         """Get boss information"""
-        await ctx.reply("ur mom")
+        pass
 
     @bloons.command()
     async def daily(self, ctx: commands.Context):
@@ -344,6 +344,11 @@ class Entertainment(commands.Cog):
     @bloons.command()
     async def race(self, ctx: commands.Context):
         """Get race information"""
+        pass
+
+    @bloons.command()
+    async def leaderboard(self, ctx: commands.Context):
+        """Get race leaderboard information"""
         pass
 
     @bloons.command()

@@ -21,6 +21,7 @@ cogs = (
     "fun",
     "mod",
     "util",
+    "xp",
 )
 
 activity_types = {
