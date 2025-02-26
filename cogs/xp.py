@@ -8,12 +8,12 @@ class Experience(commands.Cog):
     help_color = 0x6dc24e
 
     @commands.command(aliases=["rank", "lvl"])
-    async def daily(ctx: commands.Context):
+    async def level(ctx: commands.Context):
         """Show your level"""
         pass
 
     @commands.command(aliases=["lb"])
-    async def daily(ctx: commands.Context):
+    async def leaderboard(ctx: commands.Context):
         """Show the XP leaderboard for the server"""
         pass
 
