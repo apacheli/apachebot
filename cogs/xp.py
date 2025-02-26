@@ -8,17 +8,17 @@ class Experience(commands.Cog):
     help_color = 0x6dc24e
 
     @commands.command(aliases=["rank", "lvl"])
-    async def level():
+    async def daily(ctx: commands.Context):
         """Show your level"""
         pass
 
     @commands.command(aliases=["lb"])
-    async def leaderboard():
+    async def daily(ctx: commands.Context):
         """Show the XP leaderboard for the server"""
         pass
 
     @commands.command()
-    async def daily():
+    async def daily(ctx: commands.Context):
         """List daily tasks"""
         pass
 
