@@ -1,4 +1,3 @@
-import asyncio
 import datetime
 import discord
 from discord.ext import commands
@@ -7,8 +6,6 @@ import json
 import math
 import re
 from string import Template
-
-from models.guild_config import GuildConfig
 
 
 ONE_WEEK = datetime.timedelta(days=7)
@@ -43,7 +40,7 @@ def _on_member_join_embed(config, member: discord.Member):
     return embed
 
 
-def _rank_member_suspicion(ctx: commands.Context, member, now):
+def _rank_member_suspicion(_ctx: commands.Context, member, now):
     if member.bot or member.guild_permissions.ban_members:
         return 0
     conditions = 0
@@ -107,7 +104,7 @@ class JoinLogConfigureModal(Modal):
         self.view = view
         self.previous_interaction = previous_interaction
 
-    async def on_submit(self, interaction: discord.Interaction):
+    async def on_submit(self, interaction: discord.Interaction, /):
         channel = interaction.guild.get_channel(int(self.channel.value)) if self.channel.value.isdigit() else None
         if channel == None or channel.type != discord.ChannelType.text:
             return await interaction.response.send_message(":x: Invalid channel provided. Please try again.", ephemeral=True)
@@ -140,7 +137,7 @@ class JoinLogConfigure(View):
         await interaction.response.send_modal(self.modal)
         btn.disabled = True
 
-    async def interaction_check(self, interaction: discord.Interaction):
+    async def interaction_check(self, interaction: discord.Interaction, /):
         return interaction.user.id == self.ctx.author.id
 
 
@@ -169,7 +166,7 @@ class Moderation(commands.Cog):
     async def ban(self, ctx: commands.Context, user: discord.User, *, reason = None):
         """Ban a member from the server"""
         await ctx.guild.ban(user, reason=reason)
-        await ctx.reply(f":white_check_mark: Banned {member.name}.")
+        await ctx.reply(f":white_check_mark: Banned {user.name}.")
 
     @commands.command()
     @commands.bot_has_permissions(ban_members=True)
@@ -179,6 +176,7 @@ class Moderation(commands.Cog):
         """Ban multiple members from the server"""
         n = len(users)
         s = "" if n == 1 else "s"
+        c = "Too many members to list." if n > 50 else "\n".join(f"{u.name} ({u.id})" for u in users)
         confirm = await ctx.confirm(delete=True, content=f"```\n{c}\n```\n\n:question: Ban **{n}** member{s}? [y/n]")
         if not confirm:
             return await confirm.respond(":x: Operation aborted.")
@@ -471,7 +469,7 @@ class Moderation(commands.Cog):
         config = await self.bot.get_guild_config(ctx.guild)
         if config.join_log:
             return await ctx.reply(f":speech_balloon: The join log for this server is <#{config.join_log}>.", view=JoinLogConfigure(ctx))
-        return await ctx.reply(f":speech_balloon: There is no join log for this server. Click **:gear: Configure** to get started.", view=JoinLogConfigure(ctx))
+        return await ctx.reply(":speech_balloon: There is no join log for this server. Click **:gear: Configure** to get started.", view=JoinLogConfigure(ctx))
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):

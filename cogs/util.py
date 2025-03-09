@@ -1,14 +1,11 @@
-import aiohttp
 import datetime
-import discord
-from discord import ActivityType, ChannelType, Status
-from discord.ext import commands
-from discord.utils import snowflake_time
 import colorsys
 from math import floor
 import sys
 from random import randint
-from tortoise import Tortoise
+import discord
+from discord import ActivityType, ChannelType, Status
+from discord.ext import commands
 
 
 channel_types = {
@@ -111,7 +108,7 @@ class Utility(commands.Cog):
             color=int(ctx.bot.config["bot"]["color"], 16),
         )
         embed.add_field(name="Python", value=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
-        embed.add_field(name="Version", value="1.0.0")
+        embed.add_field(name="Version", value="2.0.0")
         embed.add_field(name="discord.py", value=discord.__version__)
         embed.add_field(name="Guilds", value=len(ctx.bot.guilds))
         embed.add_field(name="Users", value=len(ctx.bot.users))
@@ -120,28 +117,6 @@ class Utility(commands.Cog):
         embed.add_field(name="CPU Usage", value=f"{ctx.bot.process.cpu_percent():.2f}%")
         embed.add_field(name="Memory Usage", value=f"{ctx.bot.process.memory_full_info().uss / 1024 ** 2:.2f} MiB")
         await ctx.reply(embed=embed)
-
-    @commands.command(aliases=["models", "redis"])
-    @commands.is_owner()
-    async def db(self, ctx: commands.Context):
-        """Get database information"""
-        memory = ctx.bot.redis.info("memory")
-        color = int(ctx.bot.config["bot"]["color"], 16)
-        redis_embed = discord.Embed(color=color)
-        redis_embed.set_author(name="Redis", icon_url="https://avatars.githubusercontent.com/u/1529926")
-        redis_embed.add_field(name="Used Memory", value=memory["used_memory_human"])
-        redis_embed.add_field(name="Total System Memory", value=memory["total_system_memory_human"])
-        redis_embed.add_field(name="Used Memory RSS", value=memory["used_memory_rss_human"])
-        redis_embed.set_footer(text=f"{ctx.bot.redis.dbsize()} dbsize")
-        models_embed = discord.Embed(color=color)
-        models_embed.set_author(name="Models", icon_url="https://www.postgresql.org/media/img/about/press/elephant.png")
-        total = 0
-        for model in Tortoise.apps["models"].values():
-            count = await model.all().count()
-            total += count
-            models_embed.add_field(name=model.__name__, value=count)
-        models_embed.set_footer(text=f"{total} object{"" if total == 1 else "s"}")
-        await ctx.reply(embeds=[redis_embed, models_embed])
 
     @commands.command(aliases=["userinfo", "who", "whois", "member", "memberinfo"])
     @commands.guild_only()
@@ -341,7 +316,7 @@ class Utility(commands.Cog):
     @commands.guild_only()
     async def icon(self, ctx: commands.Context):
         """Get the guild's icon"""
-        await ctx.reply(ctx.guild.icon.url if ctx.guild.icon else f":x: No icon found.")
+        await ctx.reply(ctx.guild.icon.url if ctx.guild.icon else ":x: No icon found.")
 
     @commands.command(name="color")
     async def _color(self, ctx: commands.Context, color = None):
@@ -355,7 +330,7 @@ class Utility(commands.Cog):
         b = (color & 0xff) / 255
         hls = colorsys.rgb_to_hls(r, g, b)
         hsv = colorsys.rgb_to_hsv(r, g, b)
-        yiq = colorsys.rgb_to_yiq(r, g, b)
+        # yiq = colorsys.rgb_to_yiq(r, g, b)
         cmyk = rgb_to_cmyk(r, g, b)
         embed = discord.Embed(title=closest_color(r, g, b), color=color)
         embed.add_field(name="Decimal", value=color)

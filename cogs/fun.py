@@ -1,9 +1,10 @@
 import aiohttp
-import asyncio
 import discord
 from discord.ext import commands
-from discord.ui import button, Button, Modal, TextInput, View
+from discord.ui import button, Modal, TextInput, View
 import json
+
+from apacheutil import EmbedPaginator
 
 
 levels = (
@@ -214,20 +215,14 @@ shields = (
     2198.814,
 )
 
-
-class ThinkView(View):
-    def __init__(self, think):
-        super().__init__(timeout=None)
-        self.think = think or "..."
-
-    @button(label="See Thoughts", style=discord.ButtonStyle.gray, emoji="\N{THOUGHT BALLOON}")
-    async def think_button(self, interaction: discord.Interaction, _):
-        await interaction.response.send_message(self.think, ephemeral=True)
-
-
-def parse_message(message):
-    end_think = message.find("</think>")
-    return message[7:end_think].strip(), message[end_think + 8:].strip()
+emojis_bloons = {
+    "STARTING_CLASH": "<:Money_icon:1266472607658545172>",
+    "MAX_MONKEYS": "<:MaxMonkeysIcon:1266587052091375677>",
+    "MAX_PARAGONS": "<:ParagonIcon:1266599391087558716>",
+    "LIVES": "<:LivesIconFx:1266473058789621841>",
+    "ROUNDS": "<:StartRoundIconSmall:1266794545371414528>",
+    "MAP": "<:MapBeginnerBtn:1266797307299495968>",
+}
 
 
 class ElementalMasteryModal(Modal):
@@ -253,10 +248,10 @@ class ElementalMasteryModal(Modal):
         super().__init__(title="Elemental Mastery Calculator")
         self.view = view
 
-    def is_finished(*args, **kwargs):
+    def is_finished(self, *args, **kwargs):
         return False
 
-    async def on_submit(self, interaction: discord.Interaction):
+    async def on_submit(self, interaction: discord.Interaction, /):
         level = self.level.default = self.level.value
         elemental_mastery = self.elemental_mastery.default = self.elemental_mastery.value
         reaction_bonus = self.reaction_bonus.default = self.reaction_bonus.value
@@ -309,7 +304,7 @@ class ElementalMasteryView(View):
     async def calculate(self, interaction: discord.Interaction, _):
         await interaction.response.send_modal(self.modal)
 
-    async def interaction_check(self, interaction: discord.Interaction):
+    async def interaction_check(self, interaction: discord.Interaction, /):
         return interaction.user.id == self.ctx.author.id
 
 
@@ -318,69 +313,81 @@ class Entertainment(commands.Cog):
     help_emoji = "\N{VIDEO GAME}"
     help_color = 0xd4c44a
 
+    def __init__(self, bot: commands.AutoShardedBot):
+        super().__init__()
+        self.bot = bot
+
     @commands.command()
     async def em(self, ctx: commands.Context):
         """Calculate Elemental Mastery"""
         await ctx.reply("Click **\N{CYCLONE} Calculate** to get started.", view=ElementalMasteryView(ctx))
 
-    def _handle_bloons_document(self, ctx: commands.Context):
-        pass
+    def _create_bloons_document(self, data):
+        embed = discord.Embed(title=f"{data["name"]} | {data["difficulty"]} - {data["mode"]}")
+        embed.add_field(name=f"{emojis_bloons["STARTING_CLASH"]} Starting Cash", value=f"{data["startingCash"]}")
+        embed.add_field(name=f"{emojis_bloons["LIVES"]} Lives", value=f"{data["lives"]}/{data["maxLives"]}")
+        embed.add_field(name=f"{emojis_bloons["ROUNDS"]} Rounds", value=f"{data["startRound"]}-{data["endRound"]}")
+        embed.add_field(name=f"{emojis_bloons["MAX_MONKEYS"]} Max Monkeys", value=f"{data["maxTowers"]}")
+        embed.add_field(name=f"{emojis_bloons["MAX_PARAGONS"]} Max Paragons", value=f"{data["maxParagons"]}")
+        embed.add_field(name=f"{emojis_bloons["MAP"]} Map", value=f"{data["map"]}")
+        embed.set_thumbnail(url=data["mapURL"])
+        return embed
+
+    async def _get_bloons_resource(self, url: str, redis_name: str):
+        resource = self.bot.redis.get(redis_name)
+        if resource:
+            return json.loads(resource)
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                body = await response.json()
+                resource = body.get("body") if body.get("success") else None
+                self.bot.redis.set(redis_name, json.dumps(resource, separators=(",", ":")))
+                self.bot.redis.expire(redis_name, 43200)
+                return resource
 
     @commands.group()
+    @commands.cooldown(1, 15.0, commands.BucketType.user)
     async def bloons(self, ctx: commands.Context):
         """Really useful Bloons TD 6 commands"""
-        pass
 
     @bloons.command()
     async def boss(self, ctx: commands.Context):
         """Get boss information"""
-        pass
+        await ctx.typing()
+        bosses = await self._get_bloons_resource("https://data.ninjakiwi.com/btd6/bosses", "bloons:bosses")
+        embeds = []
+        for boss in bosses:
+            standard = await self._get_bloons_resource(boss["metadataStandard"], f"bloons:bosses:{boss["id"]}:standard")
+            if standard:
+                embeds.append(self._create_bloons_document(standard))
+            elite = await self._get_bloons_resource(boss["metadataElite"], f"bloons:bosses:{boss["id"]}:elite")
+            if elite:
+                embeds.append(self._create_bloons_document(elite))
+        await EmbedPaginator(ctx, embeds).start()
 
-    @bloons.command()
-    async def daily(self, ctx: commands.Context):
+    @bloons.command(aliases=["daily", "advanced", "coop"])
+    async def challenge(self, ctx: commands.Context):
         """Get daily challenge information"""
-        pass
+        await ctx.typing()
+        challenges = await self._get_bloons_resource("https://data.ninjakiwi.com/btd6/challenges/filter/daily", "bloons:challenges:daily")
+        embeds = []
+        for challenge in challenges:
+            document = await self._get_bloons_resource(challenge["metadata"], f"bloons:challenges:daily:{challenge["id"]}")
+            if document:
+                embeds.append(self._create_bloons_document(document))
+        await EmbedPaginator(ctx, embeds).start()
 
     @bloons.command()
     async def race(self, ctx: commands.Context):
         """Get race information"""
-        pass
-
-    @bloons.command()
-    async def leaderboard(self, ctx: commands.Context):
-        """Get race leaderboard information"""
-        pass
-
-    @bloons.command()
-    async def odyssey(self, ctx: commands.Context):
-        """Get odyssey information"""
-        pass
-
-    @bloons.command()
-    async def ct(self, ctx: commands.Context):
-        """Get contested territory information"""
-        pass
-
-    @commands.command()
-    @commands.cooldown(1, 5, commands.BucketType.user)
-    async def ai(self, ctx: commands.Context, *, prompt):
-        """Ask the AI something"""
-        ollama = ctx.bot.config["ollama"]
-        body = {
-            "model": ollama["model"],
-            "prompt": prompt,
-            "stream": False,
-        }
-        url = f"http://{ollama["host"]}:{ollama["port"]}/api/generate"
-        message = await ctx.reply(f":hourglass: Coming up with something creative...")
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=60)) as session:
-            try:
-                async with session.post(url, json=body) as response:
-                    data = await response.json()
-                    think, reply = parse_message(data["response"])
-                    await message.edit(content=reply, view=ThinkView(think))
-            except asyncio.TimeoutError:
-                await message.edit(content=":x: Took too long to respond. Please try again!")
+        await ctx.typing()
+        races = await self._get_bloons_resource("https://data.ninjakiwi.com/btd6/races", "bloons:races")
+        embeds = []
+        for race in races:
+            document = await self._get_bloons_resource(race["metadata"], f"bloons:races:{race["id"]}")
+            if document:
+                embeds.append(self._create_bloons_document(document))
+        await EmbedPaginator(ctx, embeds).start()
 
 
 async def setup(bot):

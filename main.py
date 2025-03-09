@@ -1,18 +1,16 @@
 import asyncio
-import asyncpg
 import configparser
-from enum import Enum
 import datetime
 import discord
 from discord import ActivityType, ChannelType
 from discord.ext import commands
-from discord.ui import Button, button, View
 import os
 import psutil
 import re
 import redis
 from tortoise import Tortoise
 
+from apacheutil import EmbedPaginator
 from models.guild_config import GuildConfig
 
 
@@ -43,76 +41,39 @@ async def send_messages_check(ctx: commands.Context):
     return permissions.send_messages
 
 
-class HelpPaginator(View):
-    def __init__(self, ctx, mapping, index = 0):
-        super().__init__()
-        self.ctx = ctx
-        self.embeds = []
-        for category in mapping:
-            commands = mapping[category]
-            embed = discord.Embed()
-            if category:
-                embed.title = f"{category.help_emoji} {category.qualified_name}"
-                embed.description = category.description
-                embed.color = category.help_color
+class Help(commands.HelpCommand):
+    def get_bot_mapping(self):
+        mapping = [[cog, cog.get_commands()] for cog in self.context.bot.cogs.values()]
+        embeds = []
+        for cog, cog_commands in mapping:
+            embed = discord.Embed(
+                title=f"{cog.help_emoji} {cog.qualified_name}",
+                description=cog.description,
+                color=cog.help_color,
+            )
             embed.add_field(
                 name="Commands",
-                value=" ".join(f"`{command.name}`" for command in commands),
+                value=" ".join(f"`{command.name}`" for command in cog_commands),
             )
-            embed.set_footer(text=f"{len(commands)} commands")
-            self.embeds.append(embed)
-        self.index = index
-        self.limit = len(mapping)
+            embed.set_footer(text=f"{len(cog_commands)} commands")
+            embeds.append(embed)
+        return mapping, embeds
 
-    def update(self):
-        self.left.disabled = self.index == 0
-        self.display_index.label = f"{self.index + 1}/{self.limit}"
-        self.right.disabled = self.index == self.limit - 1
-
-    async def start(self):
-        self.update()
-        await self.ctx.send(embed=self.embeds[self.index], view=self)
-
-    async def update_interaction(self, interaction: discord.Interaction):
-        self.update()
-        await interaction.response.edit_message(embed=self.embeds[self.index], view=self)
-
-    async def interaction_check(self, interaction: discord.Interaction):
-        return interaction.user.id == self.ctx.author.id
-
-    @button(style=discord.ButtonStyle.primary, emoji="\N{BLACK LEFT-POINTING TRIANGLE}")
-    async def left(self, interaction: discord.Interaction, _):
-        self.index -= 1
-        await self.update_interaction(interaction)
-
-    @button(style=discord.ButtonStyle.secondary, disabled=True)
-    async def display_index(self, interaction: discord.Interaction, btn):
-        pass
-
-    @button(style=discord.ButtonStyle.primary, emoji="\N{BLACK RIGHT-POINTING TRIANGLE}")
-    async def right(self, interaction: discord.Interaction, _):
-        self.index += 1
-        await self.update_interaction(interaction)
-
-
-class Help(commands.HelpCommand):
-    async def send_bot_help(self, mapping):
-        del mapping[None]
-        paginator = HelpPaginator(self.context, mapping)
+    async def send_bot_help(self, mapping, /):
+        paginator = EmbedPaginator(self.context, mapping[1])
         await paginator.start()
 
-    async def send_cog_help(self, cog: commands.Cog):
-        mapping = self.get_bot_mapping()
-        del mapping[None]
+    async def send_cog_help(self, cog: commands.Cog, /):
+        mapping, embeds = self.get_bot_mapping()
         index = 0
-        for c, _ in mapping.items():
-            if cog == c:
+        for c, _cog_commands in mapping:
+            if cog is c:
                 break
             index += 1
-        paginator = HelpPaginator(self.context, mapping, index)
+        paginator = EmbedPaginator(self.context, embeds, index)
         await paginator.start()
 
-    async def send_command_help(self, command: commands.Command):
+    async def send_command_help(self, command: commands.Command, /):
         embed = discord.Embed(
             title=command.qualified_name,
             description=f"{command.short_doc}\n```\n{self.get_command_signature(command)}\n```",
@@ -121,7 +82,7 @@ class Help(commands.HelpCommand):
         embed.set_footer(text=f"{command.cog.help_emoji} {command.cog.qualified_name}")
         await self.context.reply(embed=embed)
 
-    async def send_group_help(self, group: commands.Group):
+    async def send_group_help(self, group: commands.Group, /):
         embed = discord.Embed(
             title=group.qualified_name,
             description=f"{group.short_doc}\n```\n{"\n".join(self.get_command_signature(c) for c in group.commands)}\n```",
@@ -149,7 +110,7 @@ class Confirmation:
 
 
 class ApacheContext(commands.Context):
-    async def confirm(self, delete = True, timeout = 60.0, *args, **kwargs):
+    async def confirm(self, *args, delete = True, timeout = 60.0, **kwargs):
         question = await self.reply(*args, **kwargs)
         def check(message: discord.Message):
             if message.author != self.author:
@@ -169,9 +130,9 @@ class ApacheContext(commands.Context):
 
 
 class Apachengine(commands.AutoShardedBot):
-    def __init__(self, config, redis):
+    def __init__(self, config, r):
         self.config = config
-        self.redis = redis
+        self.redis = r
         self.ready_at = 0
         self.process = psutil.Process()
         activity_name = config["activity"]["name"]
@@ -189,7 +150,6 @@ class Apachengine(commands.AutoShardedBot):
             allowed_mentions=allowed_mentions,
             command_prefix=commands.when_mentioned_or(config["bot"]["command_prefix"]),
             enable_debug_events=True,
-            #help_command=Help(),
             intents=intents,
             status=config["bot"]["status"],
         )
@@ -200,7 +160,7 @@ class Apachengine(commands.AutoShardedBot):
     async def get_context(self, message, *, cls = ApacheContext):
         return await super().get_context(message, cls=cls)
 
-    async def on_command_error(self, ctx: commands.Context, error):
+    async def on_command_error(self, ctx: commands.Context, error, /):
         await super().on_command_error(ctx, error)
         if isinstance(error, commands.BotMissingPermissions):
             await ctx.reply(f":x: I am missing permissions:\n\n- `{"\n- `".join(error.missing_permissions)}`")
@@ -269,7 +229,7 @@ async def main():
         db=0,
         decode_responses=True,
     )
-    bot = Apachengine(config=config, redis=r)
+    bot = Apachengine(config=config, r=r)
     await bot.start()
 
 
