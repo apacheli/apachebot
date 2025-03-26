@@ -22,6 +22,7 @@ cogs = (
     "util",
     "xp",
 )
+cwd_len = len(os.getcwd())
 
 activity_types = {
     "playing": ActivityType.playing,
@@ -92,6 +93,7 @@ class Help(commands.HelpCommand):
             description=f"{group.short_doc}\n```\n{"\n".join(self.get_command_signature(c) for c in group.commands)}\n```",
             color=group.cog.help_color,
         )
+        embed.add_field(name="Source", value=self._command_source(group))
         embed.set_footer(text=f"{group.cog.help_emoji} {group.cog.qualified_name}")
         return embed
 
@@ -101,8 +103,14 @@ class Help(commands.HelpCommand):
             description=f"{command.short_doc}\n```\n{self.get_command_signature(command)}\n```",
             color=command.cog.help_color,
         )
+        embed.add_field(name="Source", value=self._command_source(command))
         embed.set_footer(text=f"{command.cog.help_emoji} {command.cog.qualified_name}")
         return embed
+
+    def _command_source(self, command: commands.Command):
+        code = command.callback.__code__
+        repo = "https://github.com/apacheli/apachebot/tree/master"
+        return f"{repo}{code.co_filename[cwd_len:].replace("\\", "/")}#L{code.co_firstlineno}"
 
 
 class Confirmation:
