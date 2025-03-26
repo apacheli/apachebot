@@ -1,8 +1,9 @@
 import datetime
 import colorsys
 from math import floor
+import random
 import sys
-from random import randint
+
 import discord
 from discord import ActivityType, ChannelType, Status
 from discord.ext import commands
@@ -57,9 +58,9 @@ def rgb_to_cmyk(r, g, b):
     k = max(r, g, b)
     if k == 0:
         return (0, 0, 0, 1)
-    c = (1 - r / k)
-    m = (1 - g / k)
-    y = (1 - b / k)
+    c = 1 - r / k
+    m = 1 - g / k
+    y = 1 - b / k
     return (c, m, y, 1 - k)
 
 
@@ -122,7 +123,7 @@ class Utility(commands.Cog):
     @commands.guild_only()
     async def user(self, ctx: commands.Context, member: discord.Member = None):
         """Get user information"""
-        if member == None:
+        if member is None:
             member = ctx.author
         description = ""
         for activity in member.activities:
@@ -184,7 +185,7 @@ class Utility(commands.Cog):
     async def channel(self, ctx: commands.Context, channel: discord.abc.GuildChannel = None):
         """Get channel information"""
         embed = discord.Embed(color=ctx.guild.owner.color)
-        if channel == None:
+        if channel is None:
             embed.set_author(
                 name=ctx.guild.name,
                 icon_url=ctx.guild.icon if ctx.guild.icon.url else None,
@@ -218,7 +219,7 @@ class Utility(commands.Cog):
     async def role(self, ctx: commands.Context, role: discord.Role = None):
         """Get role information"""
         embed = discord.Embed()
-        if role == None:
+        if role is None:
             embed.color = ctx.guild.owner.color
             embed.set_author(
                 name=ctx.guild.name,
@@ -239,7 +240,7 @@ class Utility(commands.Cog):
         embed.add_field(name="Integration", value=role.managed)
         embed.add_field(name="Mentionable", value=role.mentionable)
         embed.set_footer(text=role.id)
-        if role.display_icon != None:
+        if role.display_icon is not None:
             embed.set_thumbnail(url=role.display_icon.url)
         await ctx.reply(embed=embed)
 
@@ -248,7 +249,7 @@ class Utility(commands.Cog):
     async def _emoji(self, ctx: commands.Context, emoji: discord.Emoji = None):
         """Get emoji information"""
         embed = discord.Embed(color=ctx.guild.owner.color)
-        if emoji == None:
+        if emoji is None:
             embed.set_author(
                 name=ctx.guild.name,
                 icon_url=ctx.guild.icon if ctx.guild.icon.url else None,
@@ -270,13 +271,11 @@ class Utility(commands.Cog):
         """List all server boosters"""
         if not ctx.guild.premium_subscriber_role:
             return await ctx.reply(":x: No booster role.")
-        embed = discord.Embed(color=ctx.guild.premium_subscriber_role.color)
+        embed = discord.Embed(color=ctx.guild.premium_subscriber_role.color, description="")
         count = 0
-        description = ""
         for member in ctx.guild.premium_subscribers:
             count += 1
-            description += f"{count}. {member.mention} <t:{floor(member.premium_since.timestamp())}:R>\n"
-        embed.description = description
+            embed.description += f"{count}. {member.global_name} <t:{floor(member.premium_since.timestamp())}:R>\n"
         embed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
         embed.set_footer(text=f"{count} boosters")
         await ctx.reply(embed=embed)
@@ -285,7 +284,7 @@ class Utility(commands.Cog):
     @commands.guild_only()
     async def spotify(self, ctx: commands.Context, member: discord.Member = None):
         """See what someone is listening to on Spotify"""
-        if member == None:
+        if member is None:
             member = ctx.author
         embeds = []
         for activity in member.activities:
@@ -310,7 +309,7 @@ class Utility(commands.Cog):
     @commands.guild_only()
     async def avatar(self, ctx: commands.Context, member: discord.Member = None):
         """Get a user's avatar"""
-        await ctx.reply(ember.display_avatar.url if member else ctx.author.display_avatar.url)
+        await ctx.reply(member.display_avatar.url if member else ctx.author.display_avatar.url)
 
     @commands.command()
     @commands.guild_only()
@@ -321,8 +320,8 @@ class Utility(commands.Cog):
     @commands.command(name="color")
     async def _color(self, ctx: commands.Context, color = None):
         """Return color information"""
-        if color == None:
-            color = randint(0, 0xffffff)
+        if color is None:
+            color = random.randint(0, 0xffffff)
         elif (color := int(color, 16)) > 0xffffff:
             return await ctx.reply(":x: Invalid hexadecimal value.")
         r = ((color >> 16) & 0xff) / 255
@@ -341,6 +340,10 @@ class Utility(commands.Cog):
         embed.add_field(name="HSV", value=f"{floor(hsv[0] * 360)}\u00B0, {floor(hsv[1] * 100)}%, {floor(hsv[2] * 100)}%")
         embed.set_thumbnail(url=f"https://singlecolorimage.com/get/{color:06X}/64x64")
         await ctx.reply(embed=embed)
+
+    @commands.command(aliases=["choose", "choices"])
+    async def choice(self, ctx: commands.Context, *choices):
+        await ctx.reply(random.choice(choices))
 
 
 async def setup(bot):

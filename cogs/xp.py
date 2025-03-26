@@ -10,17 +10,18 @@ class Experience(commands.Cog):
     @commands.command(aliases=["rank", "lvl"])
     async def level(self, ctx: commands.Context):
         """Show your level"""
-        pass
 
     @commands.command(aliases=["lb"])
     async def leaderboard(self, ctx: commands.Context):
         """Show the XP leaderboard for the server"""
-        pass
 
     @commands.command()
     async def daily(self, ctx: commands.Context):
         """List daily tasks"""
-        pass
+
+    @commands.command()
+    async def shop(self, ctx: commands.Context):
+        """Open the shop"""
 
 
 async def setup(bot):

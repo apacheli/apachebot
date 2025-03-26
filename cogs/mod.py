@@ -1,11 +1,12 @@
 import datetime
-import discord
-from discord.ext import commands
-from discord.ui import button, Button, Modal, TextInput, View
 import json
 import math
 import re
 from string import Template
+
+import discord
+from discord.ext import commands
+from discord.ui import button, Button, Modal, TextInput, View
 
 
 ONE_WEEK = datetime.timedelta(days=7)
@@ -46,7 +47,7 @@ def _rank_member_suspicion(_ctx: commands.Context, member, now):
     conditions = 0
     if member.public_flags.spammer:
         conditions += 3
-    if member.avatar == None:
+    if member.avatar is None:
         conditions += 1
     if re.search(r"\d{5,}$", member.name):
         conditions += 1
@@ -106,7 +107,7 @@ class JoinLogConfigureModal(Modal):
 
     async def on_submit(self, interaction: discord.Interaction, /):
         channel = interaction.guild.get_channel(int(self.channel.value)) if self.channel.value.isdigit() else None
-        if channel == None or channel.type != discord.ChannelType.text:
+        if channel is None or channel.type != discord.ChannelType.text:
             return await interaction.response.send_message(":x: Invalid channel provided. Please try again.", ephemeral=True)
         _fake_config = await self.view.ctx.bot.update_guild_config(
             self.view.ctx.guild,
@@ -131,7 +132,7 @@ class JoinLogConfigure(View):
 
     @button(style=discord.ButtonStyle.secondary, label="Configure", emoji="\N{GEAR}")
     async def configure(self, interaction: discord.Interaction, btn: Button):
-        if self.modal == None:
+        if self.modal is None:
             config = await self.ctx.bot.get_guild_config(self.ctx.guild)
             self.modal = JoinLogConfigureModal(self, interaction, config)
         await interaction.response.send_modal(self.modal)
@@ -347,7 +348,7 @@ class Moderation(commands.Cog):
     @commands.guild_only()
     async def slowmode(self, ctx: commands.Context, delay = None, *, reason = None):
         """Enable slowmode for the channel"""
-        if delay != None:
+        if delay is not None:
             slowmode_delay = self.bot.parse_time(delay, False)
         else:
             slowmode_delay = 5 if ctx.channel.slowmode_delay == 0 else 0
@@ -392,7 +393,7 @@ class Moderation(commands.Cog):
     @commands.guild_only()
     async def clearnick(self, ctx: commands.Context, member: discord.Member):
         """Clear a member's nickname"""
-        if member.nick == None:
+        if member.nick is None:
             return
         await member.edit(nick=None)
         await ctx.message.add_reaction("\N{WHITE HEAVY CHECK MARK}")
@@ -426,7 +427,7 @@ class Moderation(commands.Cog):
     async def restrict(self, ctx: commands.Context, *, reason = None):
         """Restrict a channel to messages only"""
         overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
-        if overwrite.add_reactions == False:
+        if overwrite.add_reactions is False:
             return
         overwrite.update(
             add_reactions=False,
@@ -443,7 +444,7 @@ class Moderation(commands.Cog):
     async def unrestrict(self, ctx: commands.Context, *, reason = None):
         """Unrestrict the channel"""
         overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
-        if overwrite.add_reactions != False:
+        if overwrite.add_reactions is not False:
             return
         overwrite.update(
             add_reactions=None,
@@ -476,7 +477,7 @@ class Moderation(commands.Cog):
         if not member.guild.me.guild_permissions.manage_roles:
             return
         config = await self.bot.get_guild_config(member.guild)
-        if config.join_log == None:
+        if config.join_log is None:
             return
         channel = self.bot.get_channel(config.join_log)
         if channel and channel.permissions_for(member.guild.me).send_messages:

@@ -1,8 +1,11 @@
 import aiohttp
+import json
+from random import randint
+import re
+
 import discord
 from discord.ext import commands
 from discord.ui import button, Modal, TextInput, View
-import json
 
 from apacheutil import EmbedPaginator
 
@@ -256,14 +259,14 @@ class ElementalMasteryModal(Modal):
         elemental_mastery = self.elemental_mastery.default = self.elemental_mastery.value
         reaction_bonus = self.reaction_bonus.default = self.reaction_bonus.value
         if not level.isdigit():
-            return await interaction.response.edit_message(content=":x: Invalid **Level**. Please try again.", embeds=[])
+            return await interaction.response.send_message(":x: Invalid **Level**. Please try again.", ehemeral=True)
         level = int(level)
         if level < 1 or level > 100:
-            return await interaction.response.edit_message(content=":x: Invalid **Level**. Please try again.", embeds=[])
+            return await interaction.response.send_message(":x: Invalid **Level**. Please try again.", ehemeral=True)
         if not elemental_mastery.isdigit():
-            return await interaction.response.edit_message(content=":x: Invalid **Elemental Mastery**. Please try again.", embeds=[])
+            return await interaction.response.send_message(":x: Invalid **Elemental Mastery**. Please try again.", ephemeral=True)
         if not reaction_bonus.isdigit():
-            return await interaction.response.edit_message(content=":x: Invalid **Reaction Bonus**. Please try again.", embeds=[])
+            return await interaction.response.send_message(":x: Invalid **Reaction Bonus**. Please try again.", ephemeral=True)
         elemental_mastery = int(elemental_mastery)
         reaction_bonus = int(reaction_bonus)
         x = 2.78 * elemental_mastery / (elemental_mastery + 1_400) * 100 + reaction_bonus
@@ -316,6 +319,11 @@ class Entertainment(commands.Cog):
     def __init__(self, bot: commands.AutoShardedBot):
         super().__init__()
         self.bot = bot
+
+    @commands.command()
+    async def lenny(self, ctx: commands.Context):
+        """( ͡° ͜ʖ ͡°)"""
+        await ctx.reply("( ͡° ͜ʖ ͡°)")
 
     @commands.command()
     async def em(self, ctx: commands.Context):
@@ -388,6 +396,36 @@ class Entertainment(commands.Cog):
             if document:
                 embeds.append(self._create_bloons_document(document))
         await EmbedPaginator(ctx, embeds).start()
+
+    @commands.command(aliases=["die", "dice"])
+    async def roll(self, ctx: commands.Context, syntax):
+        """Roll dice using AdX format"""
+        matches = _roll_r.search(syntax)
+        if matches is None:
+            return await ctx.reply(":x: Invalid dice notation. Please try again.")
+        groups = matches.groups()
+        a = int(groups[0] or 1)
+        x = int(groups[1] or 6)
+        b = int(groups[2] or 0)
+        results = ""
+        total = b
+        for _ in range(a):
+            roll = randint(1, x)
+            results += f" + {f"**{roll}**" if roll == x else roll}"
+            total += roll
+        embed = discord.Embed(
+            title=f"You rolled {total} \N{GAME DIE}",
+            description=results[3:],
+            color=int(ctx.bot.config["bot"]["color"], 16),
+        )
+        embed.add_field(name="Dice", value=a)
+        embed.add_field(name="Faces", value=x)
+        embed.add_field(name="Addend", value=b)
+        embed.set_footer(text=f"{a}d{x}{b if b < 0 else f"+{b}"}")
+        await ctx.reply(embed=embed)
+
+
+_roll_r = re.compile(r"^(?:(\d{1,2})d)?(\d{1,4})([+-]\d{1,4})?$")
 
 
 async def setup(bot):

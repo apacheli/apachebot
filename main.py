@@ -1,12 +1,13 @@
 import asyncio
 import configparser
 import datetime
-import discord
-from discord import ActivityType, ChannelType
-from discord.ext import commands
 import os
 import psutil
 import re
+
+import discord
+from discord import ActivityType, ChannelType
+from discord.ext import commands
 import redis
 from tortoise import Tortoise
 
@@ -65,31 +66,43 @@ class Help(commands.HelpCommand):
 
     async def send_cog_help(self, cog: commands.Cog, /):
         mapping, embeds = self.get_bot_mapping()
-        index = 0
-        for c, _cog_commands in mapping:
-            if cog is c:
-                break
-            index += 1
-        paginator = EmbedPaginator(self.context, embeds, index)
+        paginator = EmbedPaginator(self.context, embeds, index=mapping[1].index(cog))
         await paginator.start()
 
     async def send_command_help(self, command: commands.Command, /):
-        embed = discord.Embed(
-            title=command.qualified_name,
-            description=f"{command.short_doc}\n```\n{self.get_command_signature(command)}\n```",
-            color=command.cog.help_color,
-        )
-        embed.set_footer(text=f"{command.cog.help_emoji} {command.cog.qualified_name}")
-        await self.context.reply(embed=embed)
+        if not command.parent:
+            return await self.context.reply(embed=self._help_command_embed(command))
+        embeds = [self._help_command_embed(c) for c in command.parent.commands]
+        embeds.insert(0, self._help_group_embed(command.parent))
+        index = 1
+        for c in command.parent.commands:
+            if command is c:
+                break
+            index += 1
+        await EmbedPaginator(self.context, embeds, index).start()
 
     async def send_group_help(self, group: commands.Group, /):
+        embeds = [self._help_command_embed(c) for c in group.commands]
+        embeds.insert(0, self._help_group_embed(group))
+        await EmbedPaginator(self.context, embeds).start()
+
+    def _help_group_embed(self, group: commands.Group):
         embed = discord.Embed(
             title=group.qualified_name,
             description=f"{group.short_doc}\n```\n{"\n".join(self.get_command_signature(c) for c in group.commands)}\n```",
             color=group.cog.help_color,
         )
         embed.set_footer(text=f"{group.cog.help_emoji} {group.cog.qualified_name}")
-        await self.context.reply(embed=embed)
+        return embed
+
+    def _help_command_embed(self, command: commands.Command):
+        embed = discord.Embed(
+            title=command.qualified_name,
+            description=f"{command.short_doc}\n```\n{self.get_command_signature(command)}\n```",
+            color=command.cog.help_color,
+        )
+        embed.set_footer(text=f"{command.cog.help_emoji} {command.cog.qualified_name}")
+        return embed
 
 
 class Confirmation:
@@ -158,7 +171,7 @@ class Apachengine(commands.AutoShardedBot):
         self.ready_at = datetime.datetime.now()
 
     async def get_context(self, message, *, cls = ApacheContext):
-        return await super().get_context(message, cls=cls)
+        return await super().get_context(message, cls=ApacheContext)
 
     async def on_command_error(self, ctx: commands.Context, error, /):
         await super().on_command_error(ctx, error)

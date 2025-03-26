@@ -1,3 +1,3 @@
-# discord.py test bot
+# apachebot
 
-A simple discord.py bot with a bunch of useful commands.
+A bot written in Python because I'm too lazy to maintain whirlybird.
