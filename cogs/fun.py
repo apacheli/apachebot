@@ -227,6 +227,8 @@ emojis_bloons = {
     "MAP": "<:MapBeginnerBtn:1266797307299495968>",
 }
 
+_roll_r = re.compile(r"^(?:(\d{1,2})d)?(\d{1,4})([+-]\d{1,4})?$")
+
 
 class ElementalMasteryModal(Modal):
     level = TextInput(
@@ -423,9 +425,6 @@ class Entertainment(commands.Cog):
         embed.add_field(name="Addend", value=b)
         embed.set_footer(text=f"{a}d{x}{b if b < 0 else f"+{b}"}")
         await ctx.reply(embed=embed)
-
-
-_roll_r = re.compile(r"^(?:(\d{1,2})d)?(\d{1,4})([+-]\d{1,4})?$")
 
 
 async def setup(bot):

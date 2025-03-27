@@ -1,6 +1,7 @@
 import asyncio
 import configparser
 import datetime
+import inspect
 import os
 import psutil
 import re
@@ -35,7 +36,7 @@ activity_types = {
 
 
 async def send_messages_check(ctx: commands.Context):
-    if ctx.guild == None:
+    if ctx.guild is None:
         return True
     permissions = ctx.channel.permissions_for(ctx.guild.me)
     if ctx.channel.type in (ChannelType.news_thread, ChannelType.public_thread, ChannelType.private_thread):
@@ -72,9 +73,9 @@ class Help(commands.HelpCommand):
 
     async def send_command_help(self, command: commands.Command, /):
         if not command.parent:
-            return await self.context.reply(embed=self._help_command_embed(command))
-        embeds = [self._help_command_embed(c) for c in command.parent.commands]
-        embeds.insert(0, self._help_group_embed(command.parent))
+            return await self.context.reply(embed=self._get_help_command_embed(command))
+        embeds = [self._get_help_command_embed(c) for c in command.parent.commands]
+        embeds.insert(0, self._get_help_group_embed(command.parent))
         index = 1
         for c in command.parent.commands:
             if command is c:
@@ -83,34 +84,40 @@ class Help(commands.HelpCommand):
         await EmbedPaginator(self.context, embeds, index).start()
 
     async def send_group_help(self, group: commands.Group, /):
-        embeds = [self._help_command_embed(c) for c in group.commands]
-        embeds.insert(0, self._help_group_embed(group))
+        embeds = [self._get_help_command_embed(c) for c in group.commands]
+        embeds.insert(0, self._get_help_group_embed(group))
         await EmbedPaginator(self.context, embeds).start()
 
-    def _help_group_embed(self, group: commands.Group):
+    def _get_help_group_embed(self, group: commands.Group):
         embed = discord.Embed(
             title=group.qualified_name,
             description=f"{group.short_doc}\n```\n{"\n".join(self.get_command_signature(c) for c in group.commands)}\n```",
             color=group.cog.help_color,
         )
-        embed.add_field(name="Source", value=self._command_source(group))
+        embed.add_field(name="Source", value=self._get_command_source(group))
         embed.set_footer(text=f"{group.cog.help_emoji} {group.cog.qualified_name}")
         return embed
 
-    def _help_command_embed(self, command: commands.Command):
+    def _get_help_command_embed(self, command: commands.Command):
         embed = discord.Embed(
             title=command.qualified_name,
             description=f"{command.short_doc}\n```\n{self.get_command_signature(command)}\n```",
             color=command.cog.help_color,
         )
-        embed.add_field(name="Source", value=self._command_source(command))
+        embed.add_field(name="Source", value=self._get_command_source(command))
         embed.set_footer(text=f"{command.cog.help_emoji} {command.cog.qualified_name}")
         return embed
 
-    def _command_source(self, command: commands.Command):
-        code = command.callback.__code__
-        repo = "https://github.com/apacheli/apachebot/tree/master"
-        return f"{repo}{code.co_filename[cwd_len:].replace("\\", "/")}#L{code.co_firstlineno}"
+    def _get_command_source(self, command: commands.Command):
+        # https://github.com/Rapptz/RoboDanny/blob/rewrite/cogs/meta.py#L405-L446
+        if command.name == "help":
+            code = Help
+            filename = "/main.py"
+        else:
+            code = command.callback.__code__
+            filename = code.co_filename[cwd_len:].replace("\\", "/")
+        lines, firstlineno = inspect.getsourcelines(code)
+        return f"https://github.com/apacheli/apachebot/tree/master{filename}#L{firstlineno}-L{firstlineno + len(lines) - 1}"
 
 
 class Confirmation:
@@ -171,6 +178,7 @@ class Apachengine(commands.AutoShardedBot):
             allowed_mentions=allowed_mentions,
             command_prefix=commands.when_mentioned_or(config["bot"]["command_prefix"]),
             enable_debug_events=True,
+            help_command=Help(),
             intents=intents,
             status=config["bot"]["status"],
         )
@@ -179,7 +187,7 @@ class Apachengine(commands.AutoShardedBot):
         self.ready_at = datetime.datetime.now()
 
     async def get_context(self, message, *, cls = ApacheContext):
-        return await super().get_context(message, cls=ApacheContext)
+        return await super().get_context(message, cls=cls)
 
     async def on_command_error(self, ctx: commands.Context, error, /):
         await super().on_command_error(ctx, error)
@@ -191,10 +199,7 @@ class Apachengine(commands.AutoShardedBot):
         for cog in cogs:
             await self.load_extension(f"cogs.{cog}")
         async with self:
-            # HACK: Assign the help command here so we can give it a cog
-            help_command = Help()
-            help_command.cog = self.get_cog("Utility")
-            self.help_command = help_command
+            self.help_command.cog = self.get_cog("Utility")
             await super().start(self.config["bot"]["bot_token"] or os.getenv("BOT_TOKEN"))
 
     def parse_time(self, time, delta=True):
