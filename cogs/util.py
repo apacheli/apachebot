@@ -109,7 +109,7 @@ class Utility(commands.Cog):
             color=int(ctx.bot.config["bot"]["color"], 16),
         )
         embed.add_field(name="Python", value=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
-        embed.add_field(name="Version", value="2.1.0")
+        embed.add_field(name="Version", value="2.2.0")
         embed.add_field(name="discord.py", value=discord.__version__)
         embed.add_field(name="Guilds", value=len(ctx.bot.guilds))
         embed.add_field(name="Users", value=len(ctx.bot.users))
@@ -343,7 +343,28 @@ class Utility(commands.Cog):
 
     @commands.command(aliases=["choose", "choices"])
     async def choice(self, ctx: commands.Context, *choices):
+        """Make a choice"""
         await ctx.reply(random.choice(choices))
+
+    @commands.command(aliases=["perm", "perms"])
+    async def permissions(self, ctx: commands.Context, member: discord.Member = None):
+        """See a member's permissions"""
+        if member is None:
+            member = ctx.author
+        permissions = ctx.channel.permissions_for(member)
+        y = ""
+        n = ""
+        for perm, value in permissions:
+            if value:
+                y += f"+ {perm}\n"
+            else:
+                n += f"- {perm}\n"
+        embed = discord.Embed(color=member.color)
+        embed.set_author(name=member.name, icon_url=member.display_avatar.url)
+        embed.add_field(name="Enabled", value=f"```diff\n{y}```")
+        embed.add_field(name="Disabled", value=f"```diff\n{n}```")
+        embed.set_footer(text=permissions.value)
+        await ctx.reply(embed=embed)
 
 
 async def setup(bot):
