@@ -64,6 +64,28 @@ def rgb_to_cmyk(r, g, b):
     return (c, m, y, 1 - k)
 
 
+def format_activity_text(activity: discord.Activity):
+    if activity.type == ActivityType.playing:
+        return f"Playing **{activity.name}**"
+    if activity.type == ActivityType.streaming:
+        return f"Streaming [**{activity.name}**]({activity.url})"
+    if activity.type == ActivityType.listening:
+        return f"Listening to [**{activity.title}**]({activity.track_url})"
+    if activity.type == ActivityType.watching:
+        return f"Watching **{activity.name}**"
+    if activity.type == ActivityType.custom:
+        emoji = f"{activity.emoji} " if activity.emoji else ""
+        return f"{emoji}{activity.name}"
+    if activity.type == ActivityType.competing:
+        return f"Competing in **{activity.name}**"
+
+
+def format_username(member: discord.Member):
+    alt_name = member.nick or member.global_name
+    tag_name = f"{member.name}{f"#{member.discriminator}" if member.discriminator != "0" else ""}"
+    return f"{alt_name or tag_name}{f" ({tag_name})" if alt_name else ""}"
+
+
 class Utility(commands.Cog):
     """Helpful commands for whatever purpose."""
     help_emoji = ":gear:" # \N{GEAR} doesn't work for some reason
@@ -109,7 +131,7 @@ class Utility(commands.Cog):
             color=int(ctx.bot.config["bot"]["color"], 16),
         )
         embed.add_field(name="Python", value=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
-        embed.add_field(name="Version", value="2.2.0")
+        embed.add_field(name="Version", value="2.3.0")
         embed.add_field(name="discord.py", value=discord.__version__)
         embed.add_field(name="Guilds", value=len(ctx.bot.guilds))
         embed.add_field(name="Users", value=len(ctx.bot.users))
@@ -127,23 +149,9 @@ class Utility(commands.Cog):
             member = ctx.author
         description = ""
         for activity in member.activities:
-            if activity.type == ActivityType.playing:
-                description += f"- Playing **{activity.name}**\n"
-            elif activity.type == ActivityType.streaming:
-                description += f"- Streaming [**{activity.name}**]({activity.url})\n"
-            elif activity.type == ActivityType.listening:
-                description += f"- Listening to [**{activity.title}**]({activity.track_url})\n"
-            elif activity.type == ActivityType.watching:
-                description += f"- Watching **{activity.name}**\n"
-            elif activity.type == ActivityType.custom:
-                emoji = f"{activity.emoji} " if activity.emoji else ""
-                description += f"- {emoji}{activity.name}\n"
-            elif activity.type == ActivityType.competing:
-                description += f"- Competing in **{activity.name}**\n"
-        alt_name = member.nick or member.global_name
-        tag_name = f"{member.name}{f"#{member.discriminator}" if member.discriminator != "0" else ""}"
+            description += f"- {format_activity_text(activity)}\n"
         embed = discord.Embed(
-            title=f"{alt_name or tag_name}{f" ({tag_name})" if alt_name else ""}",
+            title=format_username(member),
             description=description,
             color=member.color,
         )
@@ -275,7 +283,7 @@ class Utility(commands.Cog):
         count = 0
         for member in ctx.guild.premium_subscribers:
             count += 1
-            embed.description += f"{count}. {member.global_name} <t:{floor(member.premium_since.timestamp())}:R>\n"
+            embed.description += f"{count}. {format_username(member)} <t:{floor(member.premium_since.timestamp())}:R>\n"
         embed.set_author(name=ctx.guild.name, icon_url=ctx.guild.icon.url if ctx.guild.icon else None)
         embed.set_footer(text=f"{count} boosters")
         await ctx.reply(embed=embed)
@@ -298,7 +306,7 @@ class Utility(commands.Cog):
             embed.set_thumbnail(url=activity.album_cover_url)
             embed.add_field(name="Album", value=activity.album, inline=False)
             embed.add_field(name="Artists", value="\n".join(activity.artists), inline=False)
-            embed.set_footer(text=member.display_name, icon_url=member.display_avatar.url)
+            embed.set_footer(text=format_username(member), icon_url=member.display_avatar.url)
             embeds.append(embed)
         if len(embeds) > 0:
             await ctx.reply(embeds=embeds)
@@ -343,10 +351,11 @@ class Utility(commands.Cog):
 
     @commands.command(aliases=["choose", "choices"])
     async def choice(self, ctx: commands.Context, *choices):
-        """Make a choice"""
+        """Make a choice for you"""
         await ctx.reply(random.choice(choices))
 
     @commands.command(aliases=["perm", "perms"])
+    @commands.guild_only()
     async def permissions(self, ctx: commands.Context, member: discord.Member = None):
         """See a member's permissions"""
         if member is None:
@@ -365,6 +374,65 @@ class Utility(commands.Cog):
         embed.add_field(name="Disabled", value=f"```diff\n{n}```")
         embed.set_footer(text=permissions.value)
         await ctx.reply(embed=embed)
+
+    @commands.command(aliases=["activities", "playing", "game", "games"])
+    @commands.guild_only()
+    async def activity(self, ctx: commands.Context):
+        """Show popular activities"""
+        activities_dict = {}
+        l = 0
+        for m in ctx.guild.members:
+            if m.bot:
+                continue
+            for activity in m.activities:
+                if activity.type != ActivityType.playing:
+                    continue
+                l += 1
+                if activity.name not in activities_dict:
+                    activities_dict[activity.name] = 0
+                activities_dict[activity.name] += 1
+        top_activities = sorted(activities_dict.items(), key=lambda item: item[1], reverse=True)[:10]
+        embed = discord.Embed(color=ctx.guild.owner.color)
+        embed.set_author(
+            name=ctx.guild.name,
+            icon_url=ctx.guild.icon if ctx.guild.icon.url else None,
+        )
+        embed.set_footer(text=f"{l} activities")
+        i = 1
+        for a, b in top_activities:
+            embed.add_field(name=f"{i}. {a}", value=b, inline=False)
+            i += 1
+        await ctx.reply(embed=embed)
+
+    @commands.command(aliases=["msg", "message"])
+    @commands.guild_only()
+    async def quote(self, ctx: commands.Context, message: discord.Message):
+        """Quote a message"""
+        embed = discord.Embed(
+            description=message.content,
+            color=message.author.color,
+            timestamp=message.created_at,
+        )
+        embed.set_author(
+            name=format_username(message.author),
+            icon_url=message.author.display_avatar.url,
+        )
+        await ctx.reply(embed=embed)
+
+    @commands.group()
+    @commands.guild_only()
+    async def tag(self, ctx: commands.Context):
+        """Use a tag"""
+        if ctx.invoked_subcommand:
+            return
+
+    @tag.command()
+    async def create(self, ctx: commands.Context):
+        """Create a tag"""
+
+    @tag.command()
+    async def delete(self, ctx: commands.Context, tag_name):
+        """Delete a tag"""
 
 
 async def setup(bot):
