@@ -1,6 +1,11 @@
 import discord
-from discord.ext import commands
-from discord.ui import Button, button, View
+from discord.ui import button, View
+
+
+def format_username(member: discord.Member):
+    alt_name = member.nick or member.global_name
+    tag_name = f"{member.name}{f"#{member.discriminator}" if member.discriminator != "0" else ""}"
+    return f"{alt_name or tag_name}{f" ({tag_name})" if alt_name else ""}"
 
 
 class EmbedPaginator(View):
@@ -24,7 +29,7 @@ class EmbedPaginator(View):
         self.update()
         await interaction.response.edit_message(embed=self.embeds[self.index], view=self)
 
-    async def interaction_check(self, interaction: discord.Interaction):
+    async def interaction_check(self, interaction: discord.Interaction, /):
         return interaction.user.id == self.ctx.author.id
 
     @button(style=discord.ButtonStyle.primary, emoji="\N{BLACK LEFT-POINTING DOUBLE TRIANGLE}")

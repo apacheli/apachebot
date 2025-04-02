@@ -8,6 +8,8 @@ import discord
 from discord import ActivityType, ChannelType, Status
 from discord.ext import commands
 
+from apacheutil import format_username
+
 
 channel_types = {
     ChannelType.text: "Text Channels",
@@ -80,12 +82,6 @@ def format_activity_text(activity: discord.Activity):
         return f"Competing in **{activity.name}**"
 
 
-def format_username(member: discord.Member):
-    alt_name = member.nick or member.global_name
-    tag_name = f"{member.name}{f"#{member.discriminator}" if member.discriminator != "0" else ""}"
-    return f"{alt_name or tag_name}{f" ({tag_name})" if alt_name else ""}"
-
-
 class Utility(commands.Cog):
     """Helpful commands for whatever purpose."""
     help_emoji = ":gear:" # \N{GEAR} doesn't work for some reason
@@ -131,7 +127,7 @@ class Utility(commands.Cog):
             color=int(ctx.bot.config["bot"]["color"], 16),
         )
         embed.add_field(name="Python", value=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
-        embed.add_field(name="Version", value="2.3.0")
+        embed.add_field(name="Version", value="2.3.1")
         embed.add_field(name="discord.py", value=discord.__version__)
         embed.add_field(name="Guilds", value=len(ctx.bot.guilds))
         embed.add_field(name="Users", value=len(ctx.bot.users))

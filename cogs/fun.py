@@ -5,9 +5,9 @@ import re
 
 import discord
 from discord.ext import commands
-from discord.ui import button, Button, Modal, TextInput, View
+from discord.ui import button, Modal, TextInput, View
 
-from apacheutil import EmbedPaginator
+from apacheutil import EmbedPaginator, format_username
 
 
 levels = (
@@ -307,9 +307,10 @@ class ElementalMasteryModal(Modal):
 
 class ElementalMasteryView(View):
     def __init__(self, ctx: commands.Context):
-        super().__init__()
+        super().__init__(timeout=30.0)
         self.ctx = ctx
         self.modal = ElementalMasteryModal(self)
+        self.message = None
 
     @button(style=discord.ButtonStyle.secondary, label="Calculate", emoji="\N{CYCLONE}")
     async def calculate(self, interaction: discord.Interaction, _):
@@ -318,14 +319,21 @@ class ElementalMasteryView(View):
     async def interaction_check(self, interaction: discord.Interaction, /):
         return interaction.user.id == self.ctx.author.id
 
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        await self.message.edit(view=self)
+
 
 class RPSView(View):
     def __init__(self, player1, player2, player2_choice=None):
-        super().__init__()
+        super().__init__(timeout=15.0)
         self.player1 = player1
         self.player2 = player2
         self.player1_choice = None
         self.player2_choice = player2_choice
+        self.message = None
+        self._done = False
 
     async def pick_choice(self, interaction: discord.Interaction, choice):
         if interaction.user == self.player1:
@@ -336,26 +344,36 @@ class RPSView(View):
         if self.player1_choice is None or self.player2_choice is None:
             return
         embed = discord.Embed(color=int(interaction.client.config["bot"]["color"], 16))
-        embed.add_field(name=self.player1.name, value=rps_pretty[self.player1_choice])
-        embed.add_field(name=self.player2.name, value=rps_pretty[self.player2_choice])
+        a = format_username(self.player1)
+        b = format_username(self.player2)
+        embed.add_field(name=a, value=rps_pretty[self.player1_choice])
+        embed.add_field(name=b, value=rps_pretty[self.player2_choice])
         if self.player1_choice == self.player2_choice:
             embed.title = ":handshake: The game is a draw."
         elif (self.player1_choice - self.player2_choice) % 3 == 1:
-            embed.title = f"{self.player1.name} defeated {self.player2.name}!"
+            embed.title = f"\N{CROSSED SWORDS} {a} defeated {b}!"
         else:
-            embed.title = f"{self.player2.name} defeated {self.player1.name}!"
+            embed.title = f"\N{SHIELD} {b} defeated {a}!"
+        self._done = True
         await interaction.message.edit(content="", embed=embed, view=None)
 
-    @button(style=discord.ButtonStyle.secondary, label="Rock", emoji="\N{ROCK}")
-    async def rock(self, interaction: discord.Interaction, _btn: Button):
+    async def on_timeout(self):
+        if self._done:
+            return
+        for item in self.children:
+            item.disabled = True
+        await self.message.edit(view=self)
+
+    @button(style=discord.ButtonStyle.secondary, label="Rock", emoji="\N{MOYAI}")
+    async def rock(self, interaction: discord.Interaction, _btn):
         await self.pick_choice(interaction, 0)
 
     @button(style=discord.ButtonStyle.secondary, label="Paper", emoji="\N{NEWSPAPER}")
-    async def paper(self, interaction: discord.Interaction, _btn: Button):
+    async def paper(self, interaction: discord.Interaction, _btn):
         await self.pick_choice(interaction, 1)
 
     @button(style=discord.ButtonStyle.secondary, label="Scissors", emoji="\N{BLACK SCISSORS}")
-    async def scissors(self, interaction: discord.Interaction, _btn: Button):
+    async def scissors(self, interaction: discord.Interaction, _btn):
         await self.pick_choice(interaction, 2)
 
     async def interaction_check(self, interaction: discord.Interaction, /):
@@ -379,7 +397,9 @@ class Entertainment(commands.Cog):
     @commands.command()
     async def em(self, ctx: commands.Context):
         """Calculate Elemental Mastery"""
-        await ctx.reply("Click **\N{CYCLONE} Calculate** to get started.", view=ElementalMasteryView(ctx))
+        view = ElementalMasteryView(ctx)
+        message = await ctx.reply("Click **\N{CYCLONE} Calculate** to get started.", view=view)
+        view.message = message
 
     def _create_bloons_document(self, data):
         embed = discord.Embed(title=f"{data["name"]} | {data["difficulty"]} - {data["mode"]}")
@@ -477,13 +497,26 @@ class Entertainment(commands.Cog):
 
     @commands.command()
     async def rps(self, ctx: commands.Context, member: discord.Member = None):
-        """Play rock, paper, scissors with someone"""
+        """Play Rock Paper Scissors"""
         if member is None:
             member = ctx.bot.user
         elif ctx.author == member:
             return
         view = RPSView(ctx.author, member, randint(0, 2) if member.bot else None)
-        await ctx.reply(content=f"{ctx.author.mention} challenged {member.mention} to a game of Rock Paper Scissors!", view=view)
+        message = await ctx.reply(content=f"{ctx.author.mention} challenged {member.mention} to Rock Paper Scissors!", view=view)
+        view.message = message
+
+    @commands.group(aliases=["define", "definition", "dictionary", "term"])
+    async def urban(self, ctx: commands.Context, term):
+        """Define a word"""
+
+    @urban.command()
+    async def random(self, ctx: commands.Context):
+        """Get a random word"""
+
+    @urban.command()
+    async def wotd(self, ctx: commands.Context):
+        """Get the word of the day"""
 
 
 async def setup(bot):
