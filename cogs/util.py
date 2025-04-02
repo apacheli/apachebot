@@ -127,7 +127,7 @@ class Utility(commands.Cog):
             color=int(ctx.bot.config["bot"]["color"], 16),
         )
         embed.add_field(name="Python", value=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
-        embed.add_field(name="Version", value="2.3.1")
+        embed.add_field(name="Version", value="2.3.2")
         embed.add_field(name="discord.py", value=discord.__version__)
         embed.add_field(name="Guilds", value=len(ctx.bot.guilds))
         embed.add_field(name="Users", value=len(ctx.bot.users))

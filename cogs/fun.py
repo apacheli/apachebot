@@ -499,7 +499,7 @@ class Entertainment(commands.Cog):
     async def rps(self, ctx: commands.Context, member: discord.Member = None):
         """Play Rock Paper Scissors"""
         if member is None:
-            member = ctx.bot.user
+            member = ctx.guild.me
         elif ctx.author == member:
             return
         view = RPSView(ctx.author, member, randint(0, 2) if member.bot else None)
