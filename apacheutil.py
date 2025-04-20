@@ -8,10 +8,34 @@ def format_username(member: discord.Member):
     return f"{alt_name or tag_name}{f" ({tag_name})" if alt_name else ""}"
 
 
-class EmbedPaginator(View):
-    def __init__(self, ctx, embeds, index = 0):
-        super().__init__()
+def chunk_split(arr, n):
+    chunks = []
+    for i in range(0, len(arr), n):
+        chunks.append(arr[i:i + n])
+    return chunks
+
+
+class BaseView(View):
+    def __init__(self, ctx, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.ctx = ctx
+        self.message = None
+        self.done = False
+
+    async def interaction_check(self, interaction: discord.Interaction, /):
+        return interaction.user.id == self.ctx.author.id
+
+    async def on_timeout(self):
+        if self.done:
+            return
+        for item in self.children:
+            item.disabled = True
+        await self.message.edit(view=self)
+
+
+class EmbedPaginator(BaseView):
+    def __init__(self, ctx, embeds, index = 0):
+        super().__init__(ctx)
         self.embeds = embeds
         self.index = index
         self.limit = len(embeds)
@@ -23,7 +47,7 @@ class EmbedPaginator(View):
 
     async def start(self):
         self.update()
-        await self.ctx.reply(embed=self.embeds[self.index], view=self)
+        self.message = await self.ctx.reply(embed=self.embeds[self.index], view=self)
 
     async def update_interaction(self, interaction: discord.Interaction):
         self.update()

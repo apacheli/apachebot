@@ -3,8 +3,8 @@ import configparser
 import datetime
 import inspect
 import os
-import psutil
 import re
+import psutil
 
 import discord
 from discord import ActivityType, ChannelType
@@ -21,7 +21,6 @@ cogs = (
     "fun",
     "mod",
     "util",
-    "xp",
 )
 cwd_len = len(os.getcwd())
 
@@ -160,6 +159,7 @@ class ApacheContext(commands.Context):
 class Apachengine(commands.AutoShardedBot):
     def __init__(self, config, r):
         self.config = config
+        self.version = "3.0.0"
         self.redis = r
         self.ready_at = 0
         self.process = psutil.Process()
@@ -246,7 +246,7 @@ async def main():
     port = config["db"]["port"] or os.getenv("DB_PORT")
     await Tortoise.init(
         db_url=f"postgres://{user}:{password}@{host}:{port}/{database}",
-        modules={"models": ["models.guild_config"]},
+        modules={"models": ["models.guild_config", "models.guild_tag"]},
     )
     await Tortoise.generate_schemas()
     r = redis.Redis(

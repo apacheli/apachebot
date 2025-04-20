@@ -1,13 +1,15 @@
 import aiohttp
+from datetime import datetime
 import json
 from random import randint
 import re
+from urllib.parse import quote
 
 import discord
 from discord.ext import commands
-from discord.ui import button, Modal, TextInput, View
+from discord.ui import button, Modal, TextInput
 
-from apacheutil import EmbedPaginator, format_username
+from apacheutil import BaseView, EmbedPaginator, format_username
 
 
 levels = (
@@ -234,6 +236,7 @@ rps_pretty = [
 ]
 
 _roll_r = re.compile(r"^(?:(\d{1,2})d)?(\d{1,4})([+-]\d{1,4})?$")
+_urban_r = pattern = re.compile(r"\[(.*?)\]")
 
 
 class ElementalMasteryModal(Modal):
@@ -305,35 +308,23 @@ class ElementalMasteryModal(Modal):
         await interaction.response.edit_message(content="", embeds=[rb_embed, rd_embed])
 
 
-class ElementalMasteryView(View):
+class ElementalMasteryView(BaseView):
     def __init__(self, ctx: commands.Context):
-        super().__init__(timeout=30.0)
-        self.ctx = ctx
+        super().__init__(ctx)
         self.modal = ElementalMasteryModal(self)
-        self.message = None
 
     @button(style=discord.ButtonStyle.secondary, label="Calculate", emoji="\N{CYCLONE}")
     async def calculate(self, interaction: discord.Interaction, _):
         await interaction.response.send_modal(self.modal)
 
-    async def interaction_check(self, interaction: discord.Interaction, /):
-        return interaction.user.id == self.ctx.author.id
 
-    async def on_timeout(self):
-        for item in self.children:
-            item.disabled = True
-        await self.message.edit(view=self)
-
-
-class RPSView(View):
+class RPSView(BaseView):
     def __init__(self, player1, player2, player2_choice=None):
-        super().__init__(timeout=15.0)
+        super().__init__(ctx=None)
         self.player1 = player1
         self.player2 = player2
         self.player1_choice = None
         self.player2_choice = player2_choice
-        self.message = None
-        self._done = False
 
     async def pick_choice(self, interaction: discord.Interaction, choice):
         if interaction.user == self.player1:
@@ -354,15 +345,8 @@ class RPSView(View):
             embed.title = f"\N{CROSSED SWORDS} {a} defeated {b}!"
         else:
             embed.title = f"\N{SHIELD} {b} defeated {a}!"
-        self._done = True
+        self.done = True
         await interaction.message.edit(content="", embed=embed, view=None)
-
-    async def on_timeout(self):
-        if self._done:
-            return
-        for item in self.children:
-            item.disabled = True
-        await self.message.edit(view=self)
 
     @button(style=discord.ButtonStyle.secondary, label="Rock", emoji="\N{MOYAI}")
     async def rock(self, interaction: discord.Interaction, _btn):
@@ -506,17 +490,32 @@ class Entertainment(commands.Cog):
         message = await ctx.reply(content=f"{ctx.author.mention} challenged {member.mention} to Rock Paper Scissors!", view=view)
         view.message = message
 
-    @commands.group(aliases=["define", "definition", "dictionary", "term"])
-    async def urban(self, ctx: commands.Context, term):
+    async def _urban(self, term: str):
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"https://api.urbandictionary.com/v0/define?term={quote(term)}") as response:
+                data = await response.json()
+                return data["list"]
+
+    @commands.command(aliases=["define", "definition", "dictionary", "term"])
+    async def urban(self, ctx: commands.Context, *, term):
         """Define a word"""
-
-    @urban.command()
-    async def random(self, ctx: commands.Context):
-        """Get a random word"""
-
-    @urban.command()
-    async def wotd(self, ctx: commands.Context):
-        """Get the word of the day"""
+        url = "https://www.urbandictionary.com/define.php?term="
+        words = await self._urban(term)
+        embeds = []
+        for word in words:
+            embed = discord.Embed(
+                title=word["word"],
+                url=word["permalink"],
+                description=_urban_r.sub(lambda m: f"[{m.group(1)}]({url}{quote(m.group(1))})", word["definition"]),
+                timestamp=datetime.fromisoformat(word["written_on"]),
+            )
+            embed.add_field(name="\N{THUMBS UP SIGN}", value=word["thumbs_up"])
+            embed.add_field(name="\N{THUMBS DOWN SIGN}", value=word["thumbs_down"])
+            embed.set_footer(text=f"By {word["author"]}")
+            embeds.append(embed)
+        if len(embeds) < 0:
+            return await ctx.reply(":x: No definitions found.")
+        await EmbedPaginator(ctx, embeds).start()
 
 
 async def setup(bot):

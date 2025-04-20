@@ -50,6 +50,11 @@ class Developer(commands.Cog):
         embed.set_footer(text=timestamp)
         await ctx.reply(embed=embed)
 
+    @commands.command(aliases=["history"])
+    async def git(self, ctx: commands.Context):
+        """Show commit history"""
+        await ctx.reply("this doesn't do anything yet")
+
 
 async def setup(bot):
     await bot.add_cog(Developer(bot))

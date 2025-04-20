@@ -6,7 +6,9 @@ from string import Template
 
 import discord
 from discord.ext import commands
-from discord.ui import button, Button, Modal, TextInput, View
+from discord.ui import button, Button, Modal, TextInput
+
+from apacheutil import BaseView
 
 
 ONE_WEEK = datetime.timedelta(days=7)
@@ -77,7 +79,7 @@ class JoinLogConfigureModal(Modal):
         )
         self.welcome_description = TextInput(
             label="Welcome Description",
-            style=discord.TextStyle.long,
+            style=discord.TextStyle.paragraph,
             placeholder="Welcome to $server. Please read the rules over at $rules_channel.",
             required=False,
             max_length=1000,
@@ -108,7 +110,7 @@ class JoinLogConfigureModal(Modal):
     async def on_submit(self, interaction: discord.Interaction, /):
         channel = interaction.guild.get_channel(int(self.channel.value)) if self.channel.value.isdigit() else None
         if channel is None or channel.type != discord.ChannelType.text:
-            return await interaction.response.send_message(":x: Invalid channel provided. Please try again.", ephemeral=True)
+            return await interaction.response.send_message(":x: Invalid channel. Please try again.", ephemeral=True)
         _fake_config = await self.view.ctx.bot.update_guild_config(
             self.view.ctx.guild,
             join_log=channel.id,
@@ -117,6 +119,8 @@ class JoinLogConfigureModal(Modal):
             welcome_image=self.welcome_image.value.strip(),
             welcome_footer=self.welcome_footer.value.strip(),
         )
+        self.view.configure.disabled = True
+        self.view.done = True
         await self.previous_interaction.edit_original_response(view=self.view)
         await interaction.response.send_message(
             f":white_check_mark: Set the join log to <#{channel.id}>. Your join log will look like this:",
@@ -124,19 +128,17 @@ class JoinLogConfigureModal(Modal):
         )
 
 
-class JoinLogConfigure(View):
+class JoinLogConfigure(BaseView):
     def __init__(self, ctx: commands.Context):
-        super().__init__()
-        self.ctx = ctx
+        super().__init__(ctx=ctx)
         self.modal = None
 
     @button(style=discord.ButtonStyle.secondary, label="Configure", emoji="\N{GEAR}")
-    async def configure(self, interaction: discord.Interaction, btn: Button):
+    async def configure(self, interaction: discord.Interaction, _btn: Button):
         if self.modal is None:
             config = await self.ctx.bot.get_guild_config(self.ctx.guild)
             self.modal = JoinLogConfigureModal(self, interaction, config)
         await interaction.response.send_modal(self.modal)
-        btn.disabled = True
 
     async def interaction_check(self, interaction: discord.Interaction, /):
         return interaction.user.id == self.ctx.author.id
@@ -245,7 +247,7 @@ class Moderation(commands.Cog):
         """Mute a member"""
         if member.is_timed_out:
             return
-        await member.timeout(self.bot.parse_time(until), reason=reason)
+        await member.timeout(ctx.bot.parse_time(until), reason=reason)
         await ctx.reply(f":white_check_mark: Timed out {member.name}.")
 
     @commands.command(aliases=["untimeout"])
@@ -314,7 +316,7 @@ class Moderation(commands.Cog):
             send_messages=False,
         )
         await ctx.guild.default_role.edit(permissions=permissions, reason=reason)
-        delay = datetime.datetime.now(datetime.timezone.utc) + self.bot.parse_time(until, True)
+        delay = datetime.datetime.now(datetime.timezone.utc) + ctx.bot.parse_time(until, True)
         await ctx.guild.edit(
             dms_disabled_until=delay,
             invites_disabled=True,
@@ -349,7 +351,7 @@ class Moderation(commands.Cog):
     async def slowmode(self, ctx: commands.Context, delay = None, *, reason = None):
         """Enable slowmode for the channel"""
         if delay is not None:
-            slowmode_delay = self.bot.parse_time(delay, False)
+            slowmode_delay = ctx.bot.parse_time(delay, False)
         else:
             slowmode_delay = 5 if ctx.channel.slowmode_delay == 0 else 0
         await ctx.channel.edit(slowmode_delay=slowmode_delay, reason=reason)
@@ -459,7 +461,7 @@ class Moderation(commands.Cog):
     @commands.guild_only()
     async def guild_config(self, ctx: commands.Context):
         """Show the server configuration"""
-        config = await self.bot.get_guild_config(ctx.guild)
+        config = await ctx.bot.get_guild_config(ctx.guild)
         await ctx.reply(f"```json\n{json.dumps(dict(config), indent=4)}\n```")
 
     @commands.command(aliases=["joinlog"])
@@ -467,10 +469,13 @@ class Moderation(commands.Cog):
     @commands.guild_only()
     async def join_log(self, ctx: commands.Context):
         """Set the join log for this server"""
-        config = await self.bot.get_guild_config(ctx.guild)
+        config = await ctx.bot.get_guild_config(ctx.guild)
+        view = JoinLogConfigure(ctx)
         if config.join_log:
-            return await ctx.reply(f":speech_balloon: The join log for this server is <#{config.join_log}>.", view=JoinLogConfigure(ctx))
-        return await ctx.reply(":speech_balloon: There is no join log for this server. Click **:gear: Configure** to get started.", view=JoinLogConfigure(ctx))
+            message = await ctx.reply(f":speech_balloon: The join log for **{ctx.guild.name}** is <#{config.join_log}>.", view=view)
+        else:
+            message = await ctx.reply(f":speech_balloon: No join log for **{ctx.guild.name}**. Click **:gear: Configure** to get started.", view=view)
+        view.message = message
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):

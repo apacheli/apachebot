@@ -1,5 +1,6 @@
 import datetime
 import colorsys
+import json
 from math import floor
 import random
 import sys
@@ -7,8 +8,10 @@ import sys
 import discord
 from discord import ActivityType, ChannelType, Status
 from discord.ext import commands
+from discord.ui import Button, button, Modal, TextInput, View
 
-from apacheutil import format_username
+from apacheutil import BaseView, chunk_split, EmbedPaginator, format_username
+from models.guild_tag import GuildTag
 
 
 channel_types = {
@@ -82,6 +85,12 @@ def format_activity_text(activity: discord.Activity):
         return f"Competing in **{activity.name}**"
 
 
+class QuoteView(View):
+    def __init__(self, url):
+        super().__init__()
+        self.add_item(Button(label="Jump To Message", url=url))
+
+
 class Utility(commands.Cog):
     """Helpful commands for whatever purpose."""
     help_emoji = ":gear:" # \N{GEAR} doesn't work for some reason
@@ -127,7 +136,7 @@ class Utility(commands.Cog):
             color=int(ctx.bot.config["bot"]["color"], 16),
         )
         embed.add_field(name="Python", value=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
-        embed.add_field(name="Version", value="2.3.2")
+        embed.add_field(name="Version", value=ctx.bot.version)
         embed.add_field(name="discord.py", value=discord.__version__)
         embed.add_field(name="Guilds", value=len(ctx.bot.guilds))
         embed.add_field(name="Users", value=len(ctx.bot.users))
@@ -413,22 +422,149 @@ class Utility(commands.Cog):
             name=format_username(message.author),
             icon_url=message.author.display_avatar.url,
         )
-        await ctx.reply(embed=embed)
+        await ctx.reply(embed=embed, view=QuoteView(message.jump_url))
 
-    @commands.group()
+    async def _get_tag(self, ctx: commands.Context, tag_name):
+        redis_name = f"guild_tags:{ctx.guild.id}:{tag_name}"
+        cached = ctx.bot.redis.hgetall(redis_name)
+        if cached:
+            return GuildTag(**cached)
+        tag = await GuildTag.get(guild_id=ctx.guild.id, name=tag_name)
+        mapping = self._tag_mapping(tag)
+        ctx.bot.redis.hset(redis_name, mapping=mapping)
+        ctx.bot.redis.expire(redis_name, 86400)
+        return tag
+
+    def _tag_mapping(self, tag: GuildTag):
+        return {
+            "guild_id": tag.guild_id,
+            "name": tag.name,
+            "content": tag.content,
+            "author_id": tag.author_id,
+            "created_at": tag.created_at.isoformat(),
+            "updated_at": tag.updated_at.isoformat(),
+        }
+
+    @commands.group(invoke_without_command=True, aliases=["tags"])
     @commands.guild_only()
-    async def tag(self, ctx: commands.Context):
+    async def tag(self, ctx: commands.Context, *, tag_name: str):
         """Use a tag"""
-        if ctx.invoked_subcommand:
-            return
+        tag = await self._get_tag(ctx, tag_name)
+        await ctx.send(tag.content)
 
     @tag.command()
+    @commands.cooldown(1, 10.0, commands.BucketType.user)
     async def create(self, ctx: commands.Context):
         """Create a tag"""
+        if await GuildTag.filter(guild_id=ctx.guild.id, author_id=ctx.author.id).count() > 19:
+            return await ctx.reply(":x: Too many tags. Delete some tags before creating new ones.")
+        view = TagCreateView(ctx)
+        message = await ctx.reply("Click **\N{SCROLL} Create Tag** to get started.", view=view)
+        view.message = message
 
     @tag.command()
-    async def delete(self, ctx: commands.Context, tag_name):
+    @commands.cooldown(1, 10.0, commands.BucketType.user)
+    async def list(self, ctx: commands.Context, member: discord.Member = None):
+        """Show server tags"""
+        if member:
+            tags = await GuildTag.filter(guild_id=ctx.guild.id, author_id=member.id)
+            name = format_username(member)
+            icon_url = member.display_avatar.url
+            color = member.color
+        else:
+            tags = await GuildTag.filter(guild_id=ctx.guild.id)
+            name = ctx.guild.name
+            icon_url = ctx.guild.icon.url if ctx.guild.icon else None
+            color = ctx.guild.owner.color
+        if len(tags) < 1:
+            return await ctx.reply(f":x: No tags. Create a tag using `{ctx.clean_prefix}tag create`.")
+        embeds = []
+        i = 1
+        for chunk in chunk_split(sorted(tags, key=lambda t: t.name), 10):
+            embed = discord.Embed(color=color, description="")
+            embed.set_author(name=name, icon_url=icon_url)
+            embed.set_footer(text=f"{len(tags)} tags")
+            for tag in chunk:
+                embed.description += f"{i}. {tag.name}\n"
+            i += 1
+            embeds.append(embed)
+        await EmbedPaginator(ctx, embeds).start()
+
+    @tag.command()
+    @commands.cooldown(1, 10.0, commands.BucketType.user)
+    async def delete(self, ctx: commands.Context, *, tag_name: str):
         """Delete a tag"""
+        async def delete_tag():
+            redis_name = f"guild_tags:{ctx.guild.id}:{tag_name}"
+            await tag.delete()
+            ctx.bot.redis.delete(redis_name)
+        tag = await GuildTag.get(guild_id=ctx.guild.id, name=tag_name)
+        if tag.author_id == ctx.author.id:
+            await delete_tag()
+            await ctx.reply(":white_check_mark: Tag deleted.")
+        elif ctx.author.guild_permissions.manage_messages:
+            confirm = await ctx.confirm(delete=True, content=":crossed_swords: Delete tag as moderator? [y/n]")
+            if not confirm:
+                return await confirm.respond(":x: Operation aborted.")
+            await delete_tag()
+            await ctx.reply(":white_check_mark: Tag deleted.")
+        else:
+            await ctx.reply(":x: Failed to delete tag.")
+
+    @tag.command(name="info")
+    @commands.cooldown(1, 10.0, commands.BucketType.user)
+    async def _info(self, ctx: commands.Context, tag_name):
+        """Show tag information"""
+        tag = await self._get_tag(ctx, tag_name)
+        mapping = self._tag_mapping(tag)
+        await ctx.reply(f"```json\n{json.dumps(mapping, indent=4)}\n```")
+
+
+class TagCreateModal(Modal):
+    tag_name = TextInput(
+        label="Name",
+        max_length=16,
+    )
+    tag_content = TextInput(
+        label="Content",
+        max_length=1024,
+        style=discord.TextStyle.paragraph,
+    )
+
+    def __init__(self, view):
+        super().__init__(title="Tag Creator")
+        self.view = view
+
+    def is_finished(self, *_args, **_kwargs):
+        return False
+
+    async def on_submit(self, interaction: discord.Interaction, /):
+        tag_name = self.tag_name.default = self.tag_name.value.strip()
+        tag_content = self.tag_content.default = self.tag_content.value.strip()
+        if tag_name in ("create", "delete", "list", "info"):
+            return await interaction.response.send_message(content=f":x: Bad tag name `{tag_name}`.", ephemeral=True)
+        try:
+            await GuildTag.create(
+                guild_id=interaction.guild.id,
+                name=tag_name,
+                content=tag_content,
+                author_id=interaction.user.id,
+            )
+            self.view.done = True
+            await interaction.response.edit_message(content=f":white_check_mark: Tag created. Use your tag with `{self.view.ctx.clean_prefix}tag {tag_name}`.", view=None)
+        except Exception as _e:
+            # print(e)
+            await interaction.response.send_message(content=":x: An error occurred. Please try again.", ephemeral=True)
+
+
+class TagCreateView(BaseView):
+    def __init__(self, ctx: commands.Context):
+        super().__init__(ctx)
+        self.modal = TagCreateModal(self)
+
+    @button(style=discord.ButtonStyle.secondary, label="Create Tag", emoji="\N{SCROLL}")
+    async def create(self, interaction: discord.Interaction, _):
+        await interaction.response.send_modal(self.modal)
 
 
 async def setup(bot):
