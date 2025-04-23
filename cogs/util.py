@@ -32,16 +32,33 @@ statuses = {
 
 colors = {
     "Black": (0, 0, 0),
+    "Gray": (0.5, 0.5, 0.5),
     "White": (1, 1, 1),
+
     "Red": (1, 0, 0),
     "Yellow": (1, 1, 0),
     "Green": (0, 1, 0),
     "Cyan": (0, 1, 1),
     "Blue": (0, 0, 1),
     "Magenta": (1, 0, 1),
+
+    "Crimson": (0.5, 0, 0),
+    "Dijon": (0.5, 0.5, 0),
+    "Forest": (0, 0.5, 0),
+    "Teal": (0, 0.5, 0.5),
+    "Navy": (0, 0, 0.5),
+    "Eggplant": (0.5, 0, 0.5),
+
+    "Pink": (1, 0.5, 0.5),
+    "Cream": (1, 1, 0.5),
+    "Honeydew": (0.5, 1, 0.5),
+    "Celeste": (0.5, 1, 1),
+    "Periwinkle": (0.5, 0.5, 1),
+    "Orchid": (1, 0.5, 1),
+
     "Orange": (1, 0.5, 0),
     "Chartreuse": (0.5, 1, 0),
-    "Spring Green": (0, 1, 0.5),
+    "Spring": (0, 1, 0.5),
     "Azure": (0, 0.5, 1),
     "Violet": (0.5, 0, 1),
     "Rose": (1, 0, 0.5),
@@ -83,6 +100,17 @@ def format_activity_text(activity: discord.Activity):
         return f"{emoji}{activity.name}"
     if activity.type == ActivityType.competing:
         return f"Competing in **{activity.name}**"
+
+
+def _tag_mapping(tag: GuildTag):
+    return {
+        "guild_id": tag.guild_id,
+        "name": tag.name,
+        "content": tag.content,
+        "author_id": tag.author_id,
+        "created_at": tag.created_at.isoformat(),
+        "updated_at": tag.updated_at.isoformat(),
+    }
 
 
 class QuoteView(View):
@@ -430,20 +458,10 @@ class Utility(commands.Cog):
         if cached:
             return GuildTag(**cached)
         tag = await GuildTag.get(guild_id=ctx.guild.id, name=tag_name)
-        mapping = self._tag_mapping(tag)
+        mapping = _tag_mapping(tag)
         ctx.bot.redis.hset(redis_name, mapping=mapping)
         ctx.bot.redis.expire(redis_name, 86400)
         return tag
-
-    def _tag_mapping(self, tag: GuildTag):
-        return {
-            "guild_id": tag.guild_id,
-            "name": tag.name,
-            "content": tag.content,
-            "author_id": tag.author_id,
-            "created_at": tag.created_at.isoformat(),
-            "updated_at": tag.updated_at.isoformat(),
-        }
 
     @commands.group(invoke_without_command=True, aliases=["tags"])
     @commands.guild_only()
@@ -494,8 +512,8 @@ class Utility(commands.Cog):
     @commands.cooldown(1, 10.0, commands.BucketType.user)
     async def delete(self, ctx: commands.Context, *, tag_name: str):
         """Delete a tag"""
+        redis_name = f"guild_tags:{ctx.guild.id}:{tag_name}"
         async def delete_tag():
-            redis_name = f"guild_tags:{ctx.guild.id}:{tag_name}"
             await tag.delete()
             ctx.bot.redis.delete(redis_name)
         tag = await GuildTag.get(guild_id=ctx.guild.id, name=tag_name)
@@ -513,10 +531,10 @@ class Utility(commands.Cog):
 
     @tag.command(name="info")
     @commands.cooldown(1, 10.0, commands.BucketType.user)
-    async def _info(self, ctx: commands.Context, tag_name):
+    async def _info(self, ctx: commands.Context, *, tag_name):
         """Show tag information"""
         tag = await self._get_tag(ctx, tag_name)
-        mapping = self._tag_mapping(tag)
+        mapping = _tag_mapping(tag)
         await ctx.reply(f"```json\n{json.dumps(mapping, indent=4)}\n```")
 
 
