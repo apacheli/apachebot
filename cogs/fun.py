@@ -221,12 +221,30 @@ shields = (
 )
 
 emojis_bloons = {
-    "STARTING_CLASH": "<:Money_icon:1266472607658545172>",
-    "MAX_MONKEYS": "<:MaxMonkeysIcon:1266587052091375677>",
-    "MAX_PARAGONS": "<:ParagonIcon:1266599391087558716>",
-    "LIVES": "<:LivesIconFx:1266473058789621841>",
-    "ROUNDS": "<:StartRoundIconSmall:1266794545371414528>",
-    "MAP": "<:MapBeginnerBtn:1266797307299495968>",
+    "STARTING_CLASH": "<:_:1266472607658545172>",
+    "MAX_MONKEYS": "<:_:1266587052091375677>",
+    "MAX_PARAGONS": "<:_:1266599391087558716>",
+    "LIVES": "<:_:1266473058789621841>",
+    "ROUNDS": "<:_:1266794545371414528>",
+    "MAP": "<:_:1266797307299495968>",
+    "ABILITY_COOLDOWN_INCREASE": "<:_:1266475019744313458>",
+    "ABILITY_COOLDOWN_DECREASE": "<:_:1266475018720776242>",
+    "REMOVABLE_COST_INCREASE": "<:_:1266482291211763803>",
+    "REMOVABLE_COST_DECREASE": "<:_:1266482289785966793>",
+    "REGROW_RATE_INCREASE": "<:_:1266587031262330880>",
+    "REGROW_RATE_DECREASE": "<:_:1266587030045982834>",
+    "BLOON_SPEED_INCREASE": "<:_:1266476443550879746>",
+    "BLOON_SPEED_DECREASE": "<:_:1266587474939875328>",
+    "MOAB_SPEED_INCREASE": "<:_:1266483982724235376>",
+    "MOAB_SPEED_DECREASE": "<:_:1266483981503824044>",
+    "BOSS_SPEED_INCREASE": "<:_:1266587877878534278>",
+    "BOSS_SPEED_DECREASE": "<:_:1266587879002603610>",
+    "CERAMIC_HP_INCREASE": "<:_:1266586881286738002>",
+    "CERAMIC_HP_DECREASE": "<:_:1266586880334626847>",
+    "MOAB_HP_INCREASE": "<:_:1266483985131896882>",
+    "MOAB_HP_DECREASE": "<:_:1266483983684731003>",
+    "BOSS_HP_INCREASE": "<:_:1266588226467135499>",
+    "BOSS_HP_DECREASE": "<:_:1266588225799983166>"
 }
 
 rps_pretty = [
@@ -237,6 +255,79 @@ rps_pretty = [
 
 _roll_r = re.compile(r"^(?:(\d{1,2})d)?(\d{1,4})([+-]\d{1,4})?$")
 _urban_r = pattern = re.compile(r"\[(.*?)\]")
+
+
+def challenge_color(s):
+    return 0x4694d5 if s.startswith("rot") else 0xea6334 if s.startswith("adv") else 0xff9600 if s.startswith("coop") else None
+
+
+boss_thumbnails = {
+    "bloonarius": "https://www.bloonswiki.com/images/2/27/BTD6_BloonariusPortrait.png",
+    "bloonarius-elite": "https://www.bloonswiki.com/images/7/7f/BTD6_BloonariusPortraitElite.png",
+    "lych": "https://www.bloonswiki.com/images/1/12/BTD6_LychPortrait.png",
+    "lych-elite": "https://www.bloonswiki.com/images/8/8b/BTD6_LychPortraitElite.png",
+    "vortex": "https://www.bloonswiki.com/images/8/89/BTD6_VortexPortrait.png",
+    "vortex-elite": "https://www.bloonswiki.com/images/9/9a/BTD6_VortexPortraitElite.png",
+    "dreadbloon": "https://www.bloonswiki.com/images/e/e4/BTD6_DreadbloonPortrait.png",
+    "dreadbloon-elite": "https://www.bloonswiki.com/images/c/c7/BTD6_DreadbloonPortraitElite.png",
+    "phayze": "https://www.bloonswiki.com/images/9/9a/BTD6_PhayzePortrait.png",
+    "phayze-elite": "https://www.bloonswiki.com/File:BTD6_PhayzePortraitElite.png",
+    "blastapopoulos": "https://www.bloonswiki.com/images/c/ce/BTD6_BlastapopoulosPortrait.png",
+    "blastapopoulos-elite": "https://www.bloonswiki.com/images/a/a8/BTD6_BlastapopoulosPortraitElite.png",
+}
+
+
+def create_bloons_document(data, *, color = 0xFF0000, thumbnail = None):
+    embed = discord.Embed(
+        title=f"{data["name"]} | {data["difficulty"]} - {data["mode"]}",
+        color=color,
+    )
+    embed.add_field(name=f"{emojis_bloons["STARTING_CLASH"]} Starting Cash", value=data["startingCash"])
+    embed.add_field(name=f"{emojis_bloons["LIVES"]} Lives", value=f"{data["lives"]}/{data["maxLives"]}")
+    embed.add_field(name=f"{emojis_bloons["ROUNDS"]} Rounds", value=f"{data["startRound"]}-{data["endRound"]}")
+    embed.add_field(name=f"{emojis_bloons["MAX_MONKEYS"]} Max Monkeys", value=f"{data["maxTowers"]}")
+    embed.add_field(name=f"{emojis_bloons["MAX_PARAGONS"]} Max Paragons", value=data["maxParagons"])
+    embed.add_field(name=f"{emojis_bloons["MAP"]} Map", value=data["map"])
+    embed.add_field(
+        name=f"{emojis_bloons["ABILITY_COOLDOWN_INCREASE"] if data["abilityCooldownReductionMultiplier"] >= 1 else emojis_bloons["ABILITY_COOLDOWN_DECREASE"]} Ability Cooldown",
+        value=f"{data["abilityCooldownReductionMultiplier"] * 100:.2f}%",
+    )
+    embed.add_field(
+        name=f"{emojis_bloons["REMOVABLE_COST_INCREASE"] if data["removeableCostMultiplier"] >= 1 else emojis_bloons["REMOVABLE_COST_DECREASE"]} Removable Cost",
+        value=f"{data["removeableCostMultiplier"] * 100:.2f}%",
+    )
+    bm = data["_bloonModifiers"]
+    embed.add_field(
+        name=f"{emojis_bloons["REGROW_RATE_INCREASE"] if bm["regrowRateMultiplier"] >= 1 else emojis_bloons["REGROW_RATE_DECREASE"]} Regrow Rate",
+        value=f"{data["removeableCostMultiplier"] * 100:.2f}%",
+    )
+    embed.add_field(
+        name=f"{emojis_bloons["BLOON_SPEED_INCREASE"] if bm["speedMultiplier"] >= 1 else emojis_bloons["BLOON_SPEED_DECREASE"]} Bloon Speed",
+        value=f"{bm["speedMultiplier"] * 100:.2f}%",
+    )
+    embed.add_field(
+        name=f"{emojis_bloons["MOAB_SPEED_INCREASE"] if bm["moabSpeedMultiplier"] >= 1 else emojis_bloons["MOAB_SPEED_DECREASE"]} MOAB Speed",
+        value=f"{bm["moabSpeedMultiplier"] * 100:.2f}%",
+    )
+    embed.add_field(
+        name=f"{emojis_bloons["BOSS_SPEED_INCREASE"] if bm["bossSpeedMultiplier"] >= 1 else emojis_bloons["BOSS_SPEED_DECREASE"]} Boss Speed",
+        value=f"{bm["bossSpeedMultiplier"] * 100:.2f}%",
+    )
+    hm = bm["healthMultipliers"]
+    embed.add_field(
+        name=f"{emojis_bloons["CERAMIC_HP_INCREASE"] if hm["bloons"] >= 1 else emojis_bloons["CERAMIC_HP_DECREASE"]} Ceramic HP",
+        value=f"{hm["bloons"] * 100:.2f}%",
+    )
+    embed.add_field(
+        name=f"{emojis_bloons["MOAB_HP_INCREASE"] if hm["moabs"] >= 1 else emojis_bloons["MOAB_HP_DECREASE"]} MOAB HP",
+        value=f"{hm["moabs"] * 100:.2f}%",
+    )
+    embed.add_field(
+        name=f"{emojis_bloons["BOSS_HP_INCREASE"] if hm["boss"] >= 1 else emojis_bloons["BOSS_HP_DECREASE"]} Boss HP",
+        value=f"{hm["boss"] * 100:.2f}%",
+    )
+    embed.set_thumbnail(url=thumbnail)
+    return embed
 
 
 class ElementalMasteryModal(Modal):
@@ -385,17 +476,6 @@ class Entertainment(commands.Cog):
         message = await ctx.reply("Click **\N{CYCLONE} Calculate** to get started.", view=view)
         view.message = message
 
-    def _create_bloons_document(self, data):
-        embed = discord.Embed(title=f"{data["name"]} | {data["difficulty"]} - {data["mode"]}")
-        embed.add_field(name=f"{emojis_bloons["STARTING_CLASH"]} Starting Cash", value=f"{data["startingCash"]}")
-        embed.add_field(name=f"{emojis_bloons["LIVES"]} Lives", value=f"{data["lives"]}/{data["maxLives"]}")
-        embed.add_field(name=f"{emojis_bloons["ROUNDS"]} Rounds", value=f"{data["startRound"]}-{data["endRound"]}")
-        embed.add_field(name=f"{emojis_bloons["MAX_MONKEYS"]} Max Monkeys", value=f"{data["maxTowers"]}")
-        embed.add_field(name=f"{emojis_bloons["MAX_PARAGONS"]} Max Paragons", value=f"{data["maxParagons"]}")
-        embed.add_field(name=f"{emojis_bloons["MAP"]} Map", value=f"{data["map"]}")
-        embed.set_thumbnail(url=data["mapURL"])
-        return embed
-
     async def _get_bloons_resource(self, url: str, redis_name: str):
         resource = self.bot.redis.get(redis_name)
         if resource:
@@ -408,49 +488,56 @@ class Entertainment(commands.Cog):
                 self.bot.redis.expire(redis_name, 43200)
                 return resource
 
-    @commands.group()
+    @commands.group(invoke_without_command=True)
     @commands.cooldown(1, 15.0, commands.BucketType.user)
     async def bloons(self, ctx: commands.Context):
         """Really useful Bloons TD 6 commands"""
+        await ctx.reply("- **Official website**: <https://btd6.com/>\n- **Steam**: <https://store.steampowered.com/app/960090/Bloons_TD_6/>\n- **Wiki**: <https://www.bloonswiki.com/>\n-# I am not affiliated with Ninja Kiwi. I just like their games.")
 
     @bloons.command()
     async def boss(self, ctx: commands.Context):
         """Get boss information"""
-        await ctx.typing()
+        message = await ctx.reply(":hourglass: Fetching resources...")
         bosses = await self._get_bloons_resource("https://data.ninjakiwi.com/btd6/bosses", "bloons:bosses")
         embeds = []
         for boss in bosses:
             standard = await self._get_bloons_resource(boss["metadataStandard"], f"bloons:bosses:{boss["id"]}:standard")
             if standard:
-                embeds.append(self._create_bloons_document(standard))
+                embeds.append(create_bloons_document(standard, color=0xf4c600, thumbnail=boss_thumbnails[boss["bossType"]]))
             elite = await self._get_bloons_resource(boss["metadataElite"], f"bloons:bosses:{boss["id"]}:elite")
             if elite:
-                embeds.append(self._create_bloons_document(elite))
-        await EmbedPaginator(ctx, embeds).start()
+                embeds.append(create_bloons_document(elite, color=0x7b00f4, thumbnail=boss_thumbnails[f"{boss["bossType"]}-elite"]))
+        await EmbedPaginator(ctx, embeds, message=message).start()
 
     @bloons.command(aliases=["daily", "advanced", "coop"])
     async def challenge(self, ctx: commands.Context):
         """Get daily challenge information"""
-        await ctx.typing()
+        message = await ctx.reply(":hourglass: Fetching resources...")
         challenges = await self._get_bloons_resource("https://data.ninjakiwi.com/btd6/challenges/filter/daily", "bloons:challenges:daily")
         embeds = []
         for challenge in challenges:
             document = await self._get_bloons_resource(challenge["metadata"], f"bloons:challenges:daily:{challenge["id"]}")
             if document:
-                embeds.append(self._create_bloons_document(document))
-        await EmbedPaginator(ctx, embeds).start()
+                # TODO: bloonswiki.com doesn't have DailyChallengeBtn.png
+                embed = create_bloons_document(
+                    document,
+                    color=challenge_color(challenge["id"]),
+                    thumbnail="https://static.wikia.nocookie.net/b__/images/b/bf/DailyChallengeBtn.png/revision/latest/scale-to-width-down/100?cb=20200601042405&path-prefix=bloons",
+                )
+                embeds.append(embed)
+        await EmbedPaginator(ctx, embeds, message=message).start()
 
     @bloons.command()
     async def race(self, ctx: commands.Context):
         """Get race information"""
-        await ctx.typing()
+        message = await ctx.reply(":hourglass: Fetching resources...")
         races = await self._get_bloons_resource("https://data.ninjakiwi.com/btd6/races", "bloons:races")
         embeds = []
         for race in races:
             document = await self._get_bloons_resource(race["metadata"], f"bloons:races:{race["id"]}")
             if document:
-                embeds.append(self._create_bloons_document(document))
-        await EmbedPaginator(ctx, embeds).start()
+                embeds.append(create_bloons_document(document, color=0xffc300, thumbnail="https://www.bloonswiki.com/images/2/24/BTD6_EventRaceIcon.png"))
+        await EmbedPaginator(ctx, embeds, message=message).start()
 
     @commands.command(aliases=["die", "dice"])
     async def roll(self, ctx: commands.Context, syntax):

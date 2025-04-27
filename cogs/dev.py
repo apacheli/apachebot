@@ -1,3 +1,4 @@
+from collections import Counter
 from datetime import datetime
 
 import discord
@@ -9,6 +10,7 @@ class Developer(commands.Cog):
     """Commands for development purposes."""
     help_emoji = "\N{DESKTOP COMPUTER}"
     help_color = 0x4885cf
+    socket_events = Counter()
 
     @commands.command(aliases=["models", "redis"])
     @commands.is_owner()
@@ -54,6 +56,27 @@ class Developer(commands.Cog):
     async def git(self, ctx: commands.Context):
         """Show commit history"""
         await ctx.reply("this doesn't do anything yet")
+
+    @commands.command()
+    async def events(self, ctx: commands.Context):
+        """Show received socket events"""
+        total_events = self.socket_events.total()
+        unique_events = len(self.socket_events)
+        socket_events = self.socket_events.most_common()
+        s = ""
+        for event_type, count in socket_events:
+            s += f"{event_type}: {count} ({(count / total_events) * 100:.2f}%)\n"
+        embed = discord.Embed(
+            description=f"```prolog\n{s}\n```",
+            color=int(ctx.bot.config["bot"]["color"], 16),
+        )
+        embed.add_field(name="Total Events", value=total_events)
+        embed.add_field(name="Unique Events", value=unique_events)
+        await ctx.reply(embed=embed)
+
+    @commands.Cog.listener()
+    async def on_socket_event_type(self, event_type):
+        self.socket_events[event_type] += 1
 
 
 async def setup(bot):

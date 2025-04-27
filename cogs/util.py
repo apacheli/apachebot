@@ -139,7 +139,7 @@ class Utility(commands.Cog):
         """Reverse text"""
         await ctx.reply(text[::-1])
 
-    @commands.command()
+    @commands.command(aliases=["raw", "clean"])
     async def escape(self, ctx: commands.Command, message: discord.Message):
         """Escape markdown text from a message"""
         await ctx.reply(discord.utils.escape_markdown(message.content))

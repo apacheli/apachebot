@@ -34,11 +34,12 @@ class BaseView(View):
 
 
 class EmbedPaginator(BaseView):
-    def __init__(self, ctx, embeds, index = 0):
+    def __init__(self, ctx, embeds, index = 0, message = None):
         super().__init__(ctx)
         self.embeds = embeds
         self.index = index
         self.limit = len(embeds)
+        self.message = message
 
     def update(self):
         self.left.disabled = self.rewind.disabled = self.index == 0
@@ -47,7 +48,10 @@ class EmbedPaginator(BaseView):
 
     async def start(self):
         self.update()
-        self.message = await self.ctx.reply(embed=self.embeds[self.index], view=self)
+        if self.message:
+            await self.message.edit(content="", embed=self.embeds[self.index], view=self)
+        else:
+            self.message = await self.ctx.reply(embed=self.embeds[self.index], view=self)
 
     async def update_interaction(self, interaction: discord.Interaction):
         self.update()
