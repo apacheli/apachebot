@@ -61,49 +61,45 @@ def _rank_member_suspicion(_ctx: commands.Context, member, now):
 
 
 class JoinLogConfigureModal(Modal):
+    channel = TextInput(
+        label="Channel ID",
+        placeholder="12345678901234567890",
+        required=False,
+        max_length=20,
+        min_length=15,
+    )
+    welcome_title = TextInput(
+        label="Welcome Title",
+        placeholder="Hello, $user!",
+        max_length=200,
+    )
+    welcome_description = TextInput(
+        label="Welcome Description",
+        style=discord.TextStyle.paragraph,
+        placeholder="Welcome to $server. Please read the rules over at $rules_channel.",
+        required=False,
+        max_length=1000,
+    )
+    welcome_image = TextInput(
+        label="Welcome Image",
+        placeholder="$avatar",
+        required=False,
+        max_length=200,
+    )
+    welcome_footer = TextInput(
+        label="Welcome Footer",
+        placeholder="$member_count members are in this server!",
+        required=False,
+        max_length=200,
+    )
+
     def __init__(self, view, previous_interaction: discord.Interaction, config):
         super().__init__(title=f"Configure Join Log for {view.ctx.guild.name}")
-        self.channel = TextInput(
-            label="Channel ID",
-            placeholder="12345678901234567890",
-            required=False,
-            max_length=20,
-            min_length=15,
-            default=config.join_log,
-        )
-        self.welcome_title = TextInput(
-            label="Welcome Title",
-            placeholder="Hello, $user!",
-            max_length=200,
-            default=config.welcome_title,
-        )
-        self.welcome_description = TextInput(
-            label="Welcome Description",
-            style=discord.TextStyle.paragraph,
-            placeholder="Welcome to $server. Please read the rules over at $rules_channel.",
-            required=False,
-            max_length=1000,
-            default=config.welcome_description,
-        )
-        self.welcome_image = TextInput(
-            label="Welcome Image",
-            placeholder="$avatar",
-            required=False,
-            max_length=200,
-            default=config.welcome_image,
-        )
-        self.welcome_footer = TextInput(
-            label="Welcome Footer",
-            placeholder="$member_count members are in this server!",
-            required=False,
-            max_length=200,
-            default=config.welcome_footer,
-        )
-        self.add_item(self.channel)
-        self.add_item(self.welcome_title)
-        self.add_item(self.welcome_description)
-        self.add_item(self.welcome_image)
-        self.add_item(self.welcome_footer)
+        self.channel.default = config.join_log
+        self.welcome_title.default = config.welcome_title
+        self.welcome_description.default = config.welcome_description
+        self.welcome_image.default = config.welcome_image
+        self.welcome_footer.default = config.welcome_footer
         self.view = view
         self.previous_interaction = previous_interaction
 

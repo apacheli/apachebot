@@ -14,6 +14,8 @@ from apacheutil import BaseView, chunk_split, EmbedPaginator, format_username
 from models.guild_tag import GuildTag
 
 
+bad_tag_prefixes = ("create", "delete", "list", "info")
+
 channel_types = {
     ChannelType.text: "Text Channels",
     ChannelType.voice: "Voice Channels",
@@ -559,7 +561,7 @@ class TagCreateModal(Modal):
     async def on_submit(self, interaction: discord.Interaction, /):
         tag_name = self.tag_name.default = self.tag_name.value.strip()
         tag_content = self.tag_content.default = self.tag_content.value.strip()
-        if tag_name in ("create", "delete", "list", "info"):
+        if tag_name.startswith(bad_tag_prefixes):
             return await interaction.response.send_message(content=f":x: Bad tag name `{tag_name}`.", ephemeral=True)
         try:
             await GuildTag.create(
@@ -568,11 +570,9 @@ class TagCreateModal(Modal):
                 content=tag_content,
                 author_id=interaction.user.id,
             )
-            self.view.done = True
-            await interaction.response.edit_message(content=f":white_check_mark: Tag created. Use your tag with `{self.view.ctx.clean_prefix}tag {tag_name}`.", view=None)
-        except Exception as _e:
-            # print(e)
-            await interaction.response.send_message(content=":x: An error occurred. Please try again.", ephemeral=True)
+        except Exception:
+            return await interaction.response.send_message(content=":x: An error occurred. Please try again.", ephemeral=True)
+        await interaction.response.edit_message(content=f":white_check_mark: Tag created. Use your tag with `{self.view.ctx.clean_prefix}tag {tag_name}`.", view=None)
 
 
 class TagCreateView(BaseView):
