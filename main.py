@@ -130,10 +130,11 @@ class Confirmation:
 
     async def respond(self, *args, **kwargs):
         if self.answer:
-            return await self.answer.reply(*args, **kwargs)
-        if self.question:
-            return await self.question.reply(*args, **kwargs)
-        return await self.ctx.reply(*args, **kwargs)
+            await self.answer.reply(*args, **kwargs)
+        elif self.question:
+            await self.question.reply(*args, **kwargs)
+        else:
+            await self.ctx.reply(*args, **kwargs)
 
 
 class ApacheContext(commands.Context):
@@ -159,7 +160,7 @@ class ApacheContext(commands.Context):
 class Apachengine(commands.AutoShardedBot):
     def __init__(self, config, r):
         self.config = config
-        self.version = "4.0.0"
+        self.version = "4.0.1"
         self.redis = r
         self.ready_at = 0
         self.process = psutil.Process()

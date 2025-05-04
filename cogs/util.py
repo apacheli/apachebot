@@ -539,6 +539,10 @@ class Utility(commands.Cog):
         mapping = _tag_mapping(tag)
         await ctx.reply(f"```json\n{json.dumps(mapping, indent=4)}\n```")
 
+    @commands.command()
+    async def invite(self, ctx: commands.Context):
+        await ctx.reply(f"https://discord.com/oauth2/authorize?client_id={ctx.bot.user.id}&permissions=0&integration_type=0&scope=bot")
+
 
 class TagCreateModal(Modal):
     tag_name = TextInput(
