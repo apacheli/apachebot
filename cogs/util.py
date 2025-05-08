@@ -541,6 +541,7 @@ class Utility(commands.Cog):
 
     @commands.command()
     async def invite(self, ctx: commands.Context):
+        """Invite the bot"""
         await ctx.reply(f"https://discord.com/oauth2/authorize?client_id={ctx.bot.user.id}&permissions=0&integration_type=0&scope=bot")
 
 
@@ -576,6 +577,7 @@ class TagCreateModal(Modal):
             )
         except Exception:
             return await interaction.response.send_message(content=":x: An error occurred. Please try again.", ephemeral=True)
+        self.view.done = True
         await interaction.response.edit_message(content=f":white_check_mark: Tag created. Use your tag with `{self.view.ctx.clean_prefix}tag {tag_name}`.", view=None)
 
 

@@ -160,7 +160,7 @@ class ApacheContext(commands.Context):
 class Apachengine(commands.AutoShardedBot):
     def __init__(self, config, r):
         self.config = config
-        self.version = "4.0.1"
+        self.version = "4.0.2"
         self.redis = r
         self.ready_at = 0
         self.process = psutil.Process()
